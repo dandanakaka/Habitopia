@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
@@ -39,3 +40,97 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+=======
+# ===============================
+# Python
+# ===============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# ===============================
+# Virtual environments
+# ===============================
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# ===============================
+# Environment variables
+# ===============================
+.env
+.env.local
+.env.development
+.env.production
+
+# ===============================
+# Firebase credentials (CRITICAL)
+# ===============================
+*service-account*.json
+firebase-key.json
+firebase-adminsdk.json
+habitopia-18ad2-firebase-adminsdk-fbsvc-3dc680a86b.json
+
+# ===============================
+# Logs
+# ===============================
+*.log
+logs/
+
+# ===============================
+# SQLite (if used later)
+# ===============================
+*.sqlite3
+db.sqlite3
+
+# ===============================
+# macOS
+# ===============================
+.DS_Store
+
+# ===============================
+# VS Code
+# ===============================
+.vscode/
+
+# ===============================
+# JetBrains IDEs
+# ===============================
+.idea/
+
+# ===============================
+# Python packaging
+# ===============================
+build/
+dist/
+*.egg-info/
+
+# ===============================
+# pytest / coverage
+# ===============================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===============================
+# mypy / type checking
+# ===============================
+.mypy_cache/
+
+# ===============================
+# FastAPI temp files
+# ===============================
+*.pid
+
+# ===============================
+# Node (for future frontend)
+# ===============================
+node_modules/
+.expo/
+dist/
+web-build/
+>>>>>>> d7e117e (Backend)

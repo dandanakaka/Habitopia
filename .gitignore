@@ -1,23 +1,12 @@
-<<<<<<< HEAD
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# ===============================
+# Node / Expo (Frontend)
+# ===============================
 node_modules/
 
-# Expo
 .expo/
 dist/
 web-build/
 expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
 
 # Metro
 .metro-health-check*
@@ -27,28 +16,29 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
+# Native mobile secrets
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
 
 # generated native folders
 /ios
 /android
-=======
+
+
 # ===============================
-# Python
+# Python (Backend)
 # ===============================
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 *.pyd
+
 
 # ===============================
 # Virtual environments
@@ -59,6 +49,7 @@ venv/
 env/
 ENV/
 
+
 # ===============================
 # Environment variables
 # ===============================
@@ -66,6 +57,8 @@ ENV/
 .env.local
 .env.development
 .env.production
+.env*.local
+
 
 # ===============================
 # Firebase credentials (CRITICAL)
@@ -75,39 +68,46 @@ firebase-key.json
 firebase-adminsdk.json
 habitopia-18ad2-firebase-adminsdk-fbsvc-3dc680a86b.json
 
+
 # ===============================
 # Logs
 # ===============================
 *.log
 logs/
 
+
 # ===============================
-# SQLite (if used later)
+# SQLite
 # ===============================
 *.sqlite3
 db.sqlite3
+
 
 # ===============================
 # macOS
 # ===============================
 .DS_Store
+*.pem
+
 
 # ===============================
 # VS Code
 # ===============================
 .vscode/
 
+
 # ===============================
 # JetBrains IDEs
 # ===============================
 .idea/
 
+
 # ===============================
 # Python packaging
 # ===============================
 build/
-dist/
 *.egg-info/
+
 
 # ===============================
 # pytest / coverage
@@ -116,21 +116,14 @@ dist/
 .coverage
 htmlcov/
 
+
 # ===============================
 # mypy / type checking
 # ===============================
 .mypy_cache/
 
+
 # ===============================
 # FastAPI temp files
 # ===============================
 *.pid
-
-# ===============================
-# Node (for future frontend)
-# ===============================
-node_modules/
-.expo/
-dist/
-web-build/
->>>>>>> d7e117e (Backend)

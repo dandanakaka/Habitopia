@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Modal
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import RPGButton from '../components/RPGButton';
 import RPGInput from '../components/RPGInput';
+import ProfileModal from '../components/ProfileModal';
 import useQuestStore from '../store/questStore';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
@@ -12,6 +13,7 @@ export default function QuestsScreen() {
   const currentUser = useAuthStore((s) => s.user);
   const memberProfiles = useRealmStore((s) => s.memberProfiles);
   const [modalVisible, setModalVisible] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [questTitle, setQuestTitle] = useState('');
   const [questDesc, setQuestDesc] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
@@ -65,20 +67,20 @@ export default function QuestsScreen() {
 
   return (
     <SafeAreaView style={st.safe}>
-      {/* Top Bar */}
+      {/* Top Bar — renamed */}
       <View style={st.topBar}>
         <View style={st.topBarLeft}>
-          <Text style={st.topBarGrid}>⊞</Text>
-          <Text style={st.topBarTitle}>HABIT_VILLAGE_V1.0</Text>
+          <Text style={st.topBarGrid}>⚔️</Text>
+          <Text style={st.topBarTitle}>FRIEND_QUESTS</Text>
         </View>
-        <View style={st.avatar}><Text style={st.avatarText}>🧙</Text></View>
+        <TouchableOpacity onPress={() => setShowProfile(true)} style={st.avatar}><Text style={st.avatarText}>🧙</Text></TouchableOpacity>
       </View>
 
       {/* Purple Header Banner */}
       <View style={st.banner}>
-        <Text style={st.bannerLabel}>SYSTEM_QUESTS // DAILY_MISSIONS</Text>
-        <Text style={st.bannerTitle}>DAILY QUESTS</Text>
-        <Text style={st.bannerSub}>TODAY'S MISSIONS</Text>
+        <Text style={st.bannerLabel}>SYSTEM_QUESTS // FRIEND_MISSIONS</Text>
+        <Text style={st.bannerTitle}>FRIEND QUESTS</Text>
+        <Text style={st.bannerSub}>ASSIGNED MISSIONS</Text>
         <View style={st.progressBox}>
           <View style={st.progressRow}>
             <Text style={st.progressLeft}>{completedCount}/{quests.length} COMPLETE</Text>
@@ -127,6 +129,8 @@ export default function QuestsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </SafeAreaView>
   );
 }
@@ -138,7 +142,7 @@ const st = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.outline,
   },
   topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topBarGrid: { color: colors.onSurface, fontSize: 18 },
+  topBarGrid: { fontSize: 18 },
   topBarTitle: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 2 },
   avatar: {
     width: 30, height: 30, backgroundColor: colors.surfaceContainer,
@@ -168,7 +172,7 @@ const st = StyleSheet.create({
   list: { padding: 12, paddingBottom: 80 },
   questRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.outlineVariant, padding: 10, gap: 10,
+    borderWidth: 1, borderColor: colors.outlineVariant, padding: 12, gap: 10,
   },
   questRowDone: { borderLeftWidth: 3, borderLeftColor: colors.secondary },
   questIconBox: {
@@ -179,8 +183,8 @@ const st = StyleSheet.create({
   questIconText: { fontSize: 18 },
   questInfo: { flex: 1 },
   questName: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 1.5 },
-  questXP: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 1, marginTop: 1 },
-  questStatusCol: { alignItems: 'flex-end', gap: 3 },
+  questXP: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 1, marginTop: 2 },
+  questStatusCol: { alignItems: 'flex-end', gap: 4 },
   questStatusText: { fontFamily: fonts.label, fontSize: 9, letterSpacing: 1.5 },
   statusCircle: {
     width: 20, height: 20, borderWidth: 1.5, borderColor: colors.outline,
@@ -216,7 +220,7 @@ const st = StyleSheet.create({
   },
   modalTitle: { fontFamily: fonts.headline, fontSize: 16, color: colors.secondary, letterSpacing: 2, marginBottom: 16 },
   memberLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginBottom: 6 },
-  memberList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  memberList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   memberChip: { borderWidth: 1, borderColor: colors.outline, paddingHorizontal: 12, paddingVertical: 6 },
   memberChipActive: { borderColor: colors.secondary, backgroundColor: 'rgba(76,227,70,0.1)' },
   memberChipText: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, letterSpacing: 1 },

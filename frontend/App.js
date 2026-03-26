@@ -9,6 +9,10 @@ import { PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_
 
 import AuthScreen from './src/screens/AuthScreen';
 import RealmHubScreen from './src/screens/RealmHubScreen';
+import CreateRealmScreen from './src/screens/CreateRealmScreen';
+import JoinRealmScreen from './src/screens/JoinRealmScreen';
+import AccessRealmScreen from './src/screens/AccessRealmScreen';
+import HabitWrappedScreen from './src/screens/HabitWrappedScreen';
 import PulseScreen from './src/screens/PulseScreen';
 import QuestsScreen from './src/screens/QuestsScreen';
 import VillageScreen from './src/screens/VillageScreen';
@@ -34,8 +38,8 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.onSurfaceVariant,
         tabBarLabelStyle: {
           fontFamily: fonts.label,
-          fontSize: 9,
-          letterSpacing: 2,
+          fontSize: 8,
+          letterSpacing: 1.5,
         },
       }}
     >
@@ -48,19 +52,19 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Quests"
+        name="FriendQuests"
         component={QuestsScreen}
         options={{
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>⚔️</Text>,
-          tabBarLabel: 'QUESTS',
+          tabBarLabel: 'FRIEND QUESTS',
         }}
       />
       <Tab.Screen
-        name="Pulse"
+        name="MainQuests"
         component={PulseScreen}
         options={{
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>◎</Text>,
-          tabBarLabel: 'PULSE',
+          tabBarLabel: 'MAIN QUESTS',
         }}
       />
     </Tab.Navigator>
@@ -111,7 +115,11 @@ export default function App() {
         <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
           <Stack.Screen name="Auth" component={AuthScreen} />
           <Stack.Screen name="RealmHub" component={RealmHubScreen} />
+          <Stack.Screen name="CreateRealm" component={CreateRealmScreen} />
+          <Stack.Screen name="JoinRealm" component={JoinRealmScreen} />
+          <Stack.Screen name="AccessRealm" component={AccessRealmScreen} />
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="HabitWrapped" component={HabitWrappedScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Image, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { colors, fonts, spacing, shape } from '../theme/theme';
 import useAuthStore from '../store/authStore';
 
@@ -7,87 +7,92 @@ export default function AuthScreen({ navigation }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [focusField, setFocusField] = useState(null);
   const login = useAuthStore((s) => s.login);
 
   const handleSubmit = () => {
-    if (!username.trim() || !password.trim()) return;
-    login(username.trim(), password);
+    if (!username.trim() || !password.trim() || !displayName.trim()) return;
+    login(username.trim(), password, displayName.trim());
     navigation.replace('RealmHub');
   };
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* System Top Bar */}
+      {/* System Top Bar — no power button */}
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
           <Text style={s.topBarIcon}>⬡</Text>
           <Text style={s.topBarTitle}>HABITOPIA_SYS</Text>
         </View>
-        <TouchableOpacity><Text style={s.topBarIcon}>⏻</Text></TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {/* Hero */}
-        <Text style={s.hero}>HABITOPIA</Text>
-        <Text style={s.heroSub}>SYSTEM_INIT // AUTHENTICATION</Text>
-
-        {/* Auth Card — purple dashed border */}
-        <View style={s.authCard}>
-          <Text style={s.accessTitle}>ACCESS YOUR SYSTEM</Text>
-          <Text style={s.accessDesc}>Continue your streak. Rebuild your village.</Text>
-
-          <Text style={s.inputLabel}>{'> '}USER_ID / EMAIL</Text>
-          <TextInput
-            style={[s.input, focusField === 'user' && s.inputFocus]}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="commander@habitopia.sys"
-            placeholderTextColor={colors.onSurfaceVariant}
-            onFocus={() => setFocusField('user')}
-            onBlur={() => setFocusField(null)}
-            selectionColor={colors.secondary}
-          />
-
-          <Text style={s.inputLabel}>{'> '}PASS_CODE</Text>
-          <TextInput
-            style={[s.input, focusField === 'pass' && s.inputFocus]}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="********"
-            placeholderTextColor={colors.onSurfaceVariant}
-            secureTextEntry
-            onFocus={() => setFocusField('pass')}
-            onBlur={() => setFocusField(null)}
-            selectionColor={colors.secondary}
-          />
-
-          {/* Submit */}
-          <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.8}>
-            <Text style={s.submitText}>INITIALIZE SESSION</Text>
-          </TouchableOpacity>
-
-          {/* Toggle */}
-          <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-            <Text style={s.toggleText}>
-              {isLogin ? 'NO SQUAD? [ ' : 'HAVE ACCOUNT? [ '}
-              <Text style={s.toggleBold}>{isLogin ? 'CREATE ONE' : 'LOGIN'}</Text>
-              {' ]'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer Status */}
-        <View style={s.footer}>
-          <View style={s.statusDots}>
-            <View style={s.dot} />
-            <View style={s.dot} />
-            <View style={[s.dot, s.dotActive]} />
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+          {/* Hero */}
+          <View style={s.heroSection}>
+            <Image source={require("../../assets/logo.png")} style={s.coinLogo} />
+            <Text style={s.hero}>HABITOPIA</Text>
+            <Text style={s.heroSub}>SYSTEM_INIT // AUTHENTICATION</Text>
           </View>
-          <Text style={s.footerText}>
-            DATA_LINK: <Text style={s.footerGreen}>ACTIVE</Text> SECURED_BY_HABIT_PROTOCOL_V4
-          </Text>
-        </View>
+
+          {/* Auth Card — purple dashed border */}
+          <View style={s.authCard}>
+            <Text style={s.accessTitle}>ACCESS YOUR SYSTEM</Text>
+            <Text style={s.accessDesc}>Continue your streak. Rebuild your village.</Text>
+
+            <Text style={s.inputLabel}>{'> '}DISPLAY_NAME</Text>
+            <TextInput
+              style={[s.input, focusField === 'display' && s.inputFocus]}
+              value={displayName}
+              onChangeText={setDisplayName}
+              placeholder="COMMANDER_TAG"
+              placeholderTextColor={colors.onSurfaceVariant}
+              onFocus={() => setFocusField('display')}
+              onBlur={() => setFocusField(null)}
+              selectionColor={colors.secondary}
+            />
+
+            <Text style={s.inputLabel}>{'> '}USER_ID / EMAIL</Text>
+            <TextInput
+              style={[s.input, focusField === 'user' && s.inputFocus]}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="commander@habitopia.sys"
+              placeholderTextColor={colors.onSurfaceVariant}
+              onFocus={() => setFocusField('user')}
+              onBlur={() => setFocusField(null)}
+              selectionColor={colors.secondary}
+            />
+
+            <Text style={s.inputLabel}>{'> '}PASS_CODE</Text>
+            <TextInput
+              style={[s.input, focusField === 'pass' && s.inputFocus]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="********"
+              placeholderTextColor={colors.onSurfaceVariant}
+              secureTextEntry
+              onFocus={() => setFocusField('pass')}
+              onBlur={() => setFocusField(null)}
+              selectionColor={colors.secondary}
+            />
+
+            {/* Submit */}
+            <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.8}>
+              <Text style={s.submitText}>INITIALIZE SESSION</Text>
+            </TouchableOpacity>
+
+            {/* Toggle */}
+            <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+              <Text style={s.toggleText}>
+                {isLogin ? 'NO SQUAD? [ ' : 'HAVE ACCOUNT? [ '}
+                <Text style={s.toggleBold}>{isLogin ? 'CREATE ONE' : 'LOGIN'}</Text>
+                {' ]'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -103,11 +108,14 @@ const s = StyleSheet.create({
   topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topBarIcon: { color: colors.secondary, fontSize: 16 },
   topBarTitle: { fontFamily: fonts.headline, fontSize: 13, color: colors.secondary, letterSpacing: 2 },
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
+  container: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 20 },
+  heroSection: { alignItems: 'center', marginBottom: 24 },
+  coinLogo: { width: 64, height: 64, marginBottom: 12 },
   hero: { fontFamily: fonts.headline, fontSize: 38, color: colors.secondary, textAlign: 'center', letterSpacing: 4 },
   heroSub: {
     fontFamily: fonts.label, fontSize: 11, color: colors.secondary, textAlign: 'center',
-    letterSpacing: 3, marginTop: 4, marginBottom: 24,
+    letterSpacing: 3, marginTop: 4,
   },
   authCard: {
     borderWidth: 2, borderColor: colors.primaryContainer, borderStyle: 'dashed',
@@ -129,10 +137,4 @@ const s = StyleSheet.create({
   submitText: { fontFamily: fonts.headline, fontSize: 15, color: '#000000', letterSpacing: 3 },
   toggleText: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, textAlign: 'center', letterSpacing: 1 },
   toggleBold: { color: colors.onSurface, textDecorationLine: 'underline' },
-  footer: { alignItems: 'center', marginTop: 30, gap: 6 },
-  statusDots: { flexDirection: 'row', gap: 4 },
-  dot: { width: 8, height: 8, backgroundColor: colors.outline, borderRadius: 0 },
-  dotActive: { backgroundColor: colors.secondary },
-  footerText: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 1.5 },
-  footerGreen: { color: colors.secondary },
 });

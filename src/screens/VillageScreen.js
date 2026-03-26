@@ -3,16 +3,29 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, Touc
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import ProgressBar from '../components/ProgressBar';
 import RPGButton from '../components/RPGButton';
+import ProfileModal from '../components/ProfileModal';
 import useRealmStore from '../store/realmStore';
 import useHabitStore from '../store/habitStore';
+import useAuthStore from '../store/authStore';
 
-export default function VillageScreen() {
+function getVillageState(health) {
+  if (health >= 80) return { icon: '🏰✨', label: 'THRIVING', tier: 5 };
+  if (health >= 60) return { icon: '🏰', label: 'STRONG', tier: 4 };
+  if (health >= 40) return { icon: '🏠', label: 'STABLE', tier: 3 };
+  if (health >= 20) return { icon: '🏗️', label: 'WEAK', tier: 2 };
+  return { icon: '🏚️', label: 'DECAYED', tier: 1 };
+}
+
+export default function VillageScreen({ navigation }) {
   const { realm, memberProfiles, inviteLink, generateInviteLink } = useRealmStore();
   const habits = useHabitStore((s) => s.habits);
+  const user = useAuthStore((s) => s.user);
   const [showLink, setShowLink] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const completedCount = habits.filter((h) => h.completed).length;
   const totalXP = habits.filter((h) => h.completed).reduce((s, h) => s + h.xp, 0);
+  const villageState = getVillageState(realm.health);
 
   const handleInvite = () => {
     const link = generateInviteLink();
@@ -25,21 +38,30 @@ export default function VillageScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* Top Bar */}
+      {/* Top Bar — compact invite left, profile icon right */}
       <View style={s.topBar}>
-        <View style={s.topBarLeft}>
-          <Text style={s.topBarGrid}>⊞</Text>
-          <Text style={s.topBarTitle}>HABIT_VILLAGE_V1.0</Text>
-        </View>
-        <View style={s.avatar}><Text style={s.avatarText}>🧙</Text></View>
+        <TouchableOpacity onPress={handleInvite} style={s.inviteTopBtn} activeOpacity={0.7}>
+          <Text style={s.inviteTopText}>⚡ INVITE</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowProfile(true)} style={s.avatar}>
+          <Text style={s.avatarText}>🧙</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Realm Header */}
+        {/* Realm Header with Village State */}
         <View style={s.realmHeader}>
-          <Text style={s.realmIcon}>🏰</Text>
+          <Text style={s.villageIcon}>{villageState.icon}</Text>
           <Text style={s.realmName}>{realm.name.toUpperCase()}</Text>
           <Text style={s.realmId}>REALM_ID: {realm.id.toUpperCase()} // {realm.members.length} MEMBERS</Text>
+        </View>
+
+        {/* Village State Indicator */}
+        <View style={s.stateRow}>
+          {[1, 2, 3, 4, 5].map((tier) => (
+            <View key={tier} style={[s.stateTick, villageState.tier >= tier && { backgroundColor: healthColor }]} />
+          ))}
+          <Text style={[s.stateLabel, { color: healthColor }]}>{villageState.label}</Text>
         </View>
 
         {/* Health Panel */}
@@ -53,7 +75,7 @@ export default function VillageScreen() {
             <View style={[s.healthFill, { width: `${realm.health}%`, backgroundColor: healthColor }]} />
           </View>
           <Text style={s.healthStatus}>
-            {realm.health >= 70 ? 'STATUS: STABLE' : realm.health >= 40 ? 'STATUS: DECLINING' : 'STATUS: CRITICAL'}
+            STATUS: {villageState.label}
           </Text>
         </View>
 
@@ -95,17 +117,27 @@ export default function VillageScreen() {
           </View>
         ))}
 
-        {/* Invite */}
-        <RPGButton title="⚡ GENERATE_INVITE_LINK" variant="accent" onPress={handleInvite} style={s.inviteBtn} />
-
+        {/* Invite Link Box */}
         {showLink && inviteLink && (
           <View style={s.linkBox}>
             <Text style={s.linkLabel}>{'> '}INVITE_LINK:</Text>
             <Text style={s.linkText} selectable>{inviteLink}</Text>
           </View>
         )}
+
+        {/* Habit Wrapped Button */}
+        <TouchableOpacity
+          style={s.wrappedBtn}
+          onPress={() => navigation.navigate('HabitWrapped')}
+          activeOpacity={0.7}
+        >
+          <Text style={s.wrappedBtnText}>📊 REALM_REPORT // MONTHLY_SUMMARY</Text>
+        </TouchableOpacity>
+
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </SafeAreaView>
   );
 }
@@ -116,9 +148,11 @@ const s = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.outline,
   },
-  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topBarGrid: { color: colors.onSurface, fontSize: 18 },
-  topBarTitle: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 2 },
+  inviteTopBtn: {
+    borderWidth: 1, borderColor: colors.secondary, paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: 'rgba(76,227,70,0.08)',
+  },
+  inviteTopText: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 2 },
   avatar: {
     width: 30, height: 30, backgroundColor: colors.surfaceContainer, borderWidth: 1,
     borderColor: colors.primaryContainer, alignItems: 'center', justifyContent: 'center',
@@ -128,9 +162,14 @@ const s = StyleSheet.create({
 
   // Realm Header
   realmHeader: { alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant },
-  realmIcon: { fontSize: 32, marginBottom: 4 },
+  villageIcon: { fontSize: 40, marginBottom: 4 },
   realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3 },
   realmId: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 2, marginTop: 2 },
+
+  // Village State Indicator
+  stateRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, paddingHorizontal: 4 },
+  stateTick: { width: 24, height: 6, backgroundColor: colors.surfaceContainerHighest },
+  stateLabel: { fontFamily: fonts.label, fontSize: 9, letterSpacing: 2, marginLeft: 8 },
 
   // Panels
   panel: {
@@ -175,12 +214,18 @@ const s = StyleSheet.create({
   },
   memberXPText: { fontFamily: fonts.headline, fontSize: 12, color: colors.secondary },
 
-  // Invite
-  inviteBtn: { marginTop: 16 },
+  // Link Box
   linkBox: {
     marginTop: 8, borderWidth: 1, borderColor: colors.outlineVariant,
     backgroundColor: colors.surface, padding: 10,
   },
   linkLabel: { fontFamily: fonts.label, fontSize: 9, color: colors.secondary, letterSpacing: 1.5, marginBottom: 4 },
   linkText: { fontFamily: fonts.body, fontSize: 11, color: colors.primaryDim },
+
+  // Wrapped Button
+  wrappedBtn: {
+    marginTop: 16, borderWidth: 1, borderColor: colors.primaryContainer,
+    backgroundColor: colors.surface, padding: 14, alignItems: 'center',
+  },
+  wrappedBtnText: { fontFamily: fonts.label, fontSize: 10, color: colors.primaryDim, letterSpacing: 2 },
 });

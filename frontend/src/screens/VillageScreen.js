@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import ProgressBar from '../components/ProgressBar';
 import RPGButton from '../components/RPGButton';
@@ -17,7 +17,7 @@ function getVillageState(health) {
 }
 
 export default function VillageScreen({ navigation }) {
-  const { realm, memberProfiles, inviteLink, generateInviteLink } = useRealmStore();
+  const { realm, memberProfiles, inviteCode, generateInviteCode, isLoading } = useRealmStore();
   const habits = useHabitStore((s) => s.habits);
   const user = useAuthStore((s) => s.user);
   const [showLink, setShowLink] = useState(false);
@@ -25,16 +25,28 @@ export default function VillageScreen({ navigation }) {
 
   const completedCount = habits.filter((h) => h.completed).length;
   const totalXP = habits.filter((h) => h.completed).reduce((s, h) => s + h.xp, 0);
-  const villageState = getVillageState(realm.health);
 
   const handleInvite = () => {
-    const link = generateInviteLink();
+    const code = generateInviteCode();
     setShowLink(true);
-    if (Platform.OS === 'web') alert(`Invite Link:\n${link}`);
-    else Alert.alert('Invite Link', link, [{ text: 'OK' }]);
+    if (Platform.OS === 'web') alert(`Invite Code:\n${code}`);
+    else Alert.alert('Invite Code', code, [{ text: 'OK' }]);
   };
 
-  const healthColor = realm.health >= 70 ? colors.secondary : realm.health >= 40 ? colors.tertiary : colors.error;
+  if (isLoading || !realm) {
+    return (
+      <SafeAreaView style={[s.safe, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.secondary} />
+        <Text style={{ fontFamily: fonts.label, color: colors.secondary, marginTop: 12, letterSpacing: 2 }}>ESTABLISHING_LINK...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const healthVal = typeof realm.health === 'number' ? realm.health : 0;
+  const villageState = getVillageState(healthVal);
+  const healthColor = healthVal >= 70 ? colors.secondary : healthVal >= 40 ? colors.tertiary : colors.error;
+  const rName = realm.names || realm.name || 'UNKNOWN REALM';
+  const membersCount = Array.isArray(realm.members) ? realm.members.length : 0;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -52,8 +64,8 @@ export default function VillageScreen({ navigation }) {
         {/* Realm Header with Village State */}
         <View style={s.realmHeader}>
           <Text style={s.villageIcon}>{villageState.icon}</Text>
-          <Text style={s.realmName}>{realm.name.toUpperCase()}</Text>
-          <Text style={s.realmId}>REALM_ID: {realm.id.toUpperCase()} // {realm.members.length} MEMBERS</Text>
+          <Text style={s.realmName}>{rName.toUpperCase()}</Text>
+          <Text style={s.realmId}>REALM_ID: {realm.id.toUpperCase()} // {membersCount} MEMBERS</Text>
         </View>
 
         {/* Village State Indicator */}
@@ -68,20 +80,20 @@ export default function VillageScreen({ navigation }) {
         <View style={s.panel}>
           <Text style={s.panelLabel}>{'> '}VILLAGE_HEALTH:</Text>
           <View style={s.healthRow}>
-            <Text style={[s.healthValue, { color: healthColor }]}>{realm.health}</Text>
+            <Text style={[s.healthValue, { color: healthColor }]}>{healthVal}</Text>
             <Text style={s.healthMax}>/100 HP</Text>
           </View>
           <View style={s.healthTrack}>
-            <View style={[s.healthFill, { width: `${realm.health}%`, backgroundColor: healthColor }]} />
+            <View style={[s.healthFill, { width: `${Math.min(100, Math.max(0, healthVal))}%`, backgroundColor: healthColor }]} />
           </View>
           <Text style={s.healthStatus}>
             STATUS: {villageState.label}
           </Text>
         </View>
 
-        {/* Session Stats */}
+        {/* Today's Contributions */}
         <View style={s.panel}>
-          <Text style={s.panelLabel}>{'> '}SESSION_STATS:</Text>
+          <Text style={s.panelLabel}>{'> '}TODAY'S_CONTRIBUTIONS:</Text>
           <View style={s.statsGrid}>
             <View style={s.statBox}>
               <Text style={s.statValue}>{completedCount}</Text>
@@ -105,7 +117,7 @@ export default function VillageScreen({ navigation }) {
         {memberProfiles.map((m) => (
           <View key={m.id} style={s.memberRow}>
             <View style={s.memberIconBox}>
-              <Text style={s.memberIcon}>{m.id === 'u1' ? '🧙' : '🗡️'}</Text>
+              <Text style={s.memberIcon}>{m.id === user?.uid ? '🧙' : '🗡️'}</Text>
             </View>
             <View style={s.memberInfo}>
               <Text style={s.memberName}>{m.username.toUpperCase()}</Text>
@@ -118,10 +130,10 @@ export default function VillageScreen({ navigation }) {
         ))}
 
         {/* Invite Link Box */}
-        {showLink && inviteLink && (
+        {showLink && inviteCode && (
           <View style={s.linkBox}>
-            <Text style={s.linkLabel}>{'> '}INVITE_LINK:</Text>
-            <Text style={s.linkText} selectable>{inviteLink}</Text>
+            <Text style={s.linkLabel}>{'> '}INVITE_CODE:</Text>
+            <Text style={s.linkText} selectable>{inviteCode}</Text>
           </View>
         )}
 
@@ -220,7 +232,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.surface, padding: 10,
   },
   linkLabel: { fontFamily: fonts.label, fontSize: 9, color: colors.secondary, letterSpacing: 1.5, marginBottom: 4 },
-  linkText: { fontFamily: fonts.body, fontSize: 11, color: colors.primaryDim },
+  linkText: { fontFamily: fonts.headline, fontSize: 18, color: colors.primaryDim, letterSpacing: 4 },
 
   // Wrapped Button
   wrappedBtn: {

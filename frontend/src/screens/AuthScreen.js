@@ -13,19 +13,31 @@ export default function AuthScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('');
   const [focusField, setFocusField] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const login = useAuthStore((s) => s.login);
+  const [errorMessage, setErrorMessage] = useState('');
+  const setUser = useAuthStore((s) => s.setUser);
+
+  const handleToggle = () => {
+    setIsLogin(!isLogin);
+    setErrorMessage('');
+  };
+
+  const handleInputChange = (setter, val) => {
+    setter(val);
+    if (errorMessage) setErrorMessage('');
+  };
 
   const handleSubmit = async () => {
     const emailStr = username.trim();
     const passStr = password.trim();
+    setErrorMessage('');
 
     // Basic validation
     if (!emailStr || !passStr) {
-      Alert.alert("Missing Fields", "Please enter your email and password.");
+      setErrorMessage("REQUIRED_FIELDS_MISSING: EMAIL_OR_PASS");
       return;
     }
     if (!isLogin && !displayName.trim()) {
-      Alert.alert("Missing Fields", "Please enter a display name for your new account.");
+      setErrorMessage("REQUIRED_FIELDS_MISSING: DISPLAY_NAME");
       return;
     }
 
@@ -35,25 +47,8 @@ export default function AuthScreen({ navigation }) {
       if (isLogin) {
         // ----- LOGIN FLOW -----
         const userCredential = await signInWithEmailAndPassword(auth, emailStr, passStr);
-        const fbUser = userCredential.user;
-
-        // Fetch their user document to get the display name
-        const userDocRef = doc(db, 'users', fbUser.uid);
-        const userDoc = await getDoc(userDocRef);
-
-        let storedData = {};
-        if (userDoc.exists()) {
-          storedData = userDoc.data();
-        }
-
-        // Pass their persistent UID to the app-wide store
-        login({
-          uid: fbUser.uid,
-          email: fbUser.email,
-          displayName: storedData.displayName || fbUser.displayName || emailStr.split('@')[0],
-          realm_id: storedData.realm_id || null,
-        });
-
+        // authStore listener will pick this up if we call setUser
+        setUser(userCredential.user);
       } else {
         // ----- SIGNUP FLOW -----
         const userCredential = await createUserWithEmailAndPassword(auth, emailStr, passStr);
@@ -65,19 +60,22 @@ export default function AuthScreen({ navigation }) {
           displayName: displayName.trim(),
           email: emailStr,
           password: passStr, // Note: Storing plain text passwords is a security risk, but added as requested
-          realm_id: null // Initialize with no squad
+          realm_ids: [],
+          xp: 0,
+          habitsCompleted: 0,
+          streak: 0,
+          level: 1
         };
 
         // Write to Firestore database -> 'users' collection -> document ID = their Firebase UID
         await setDoc(doc(db, 'users', fbUser.uid), newUserDoc);
 
         // Pass to the app-wide store
-        login(newUserDoc);
+        setUser(fbUser);
       }
 
       setIsLoading(false);
-      navigation.replace('RealmHub');
-
+      // navigation.replace('RealmHub'); // App.js will handle redirect based on auth state now
     } catch (error) {
       setIsLoading(false);
       console.error("Firebase Auth Error:", error);
@@ -87,7 +85,7 @@ export default function AuthScreen({ navigation }) {
       if (error.code === 'auth/email-already-in-use') msg = "That email already has an account. Switch to Login.";
       if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') msg = "Incorrect email or password.";
 
-      Alert.alert("Authentication Failed", msg);
+      setErrorMessage(msg.toUpperCase());
     }
   };
 
@@ -115,6 +113,13 @@ export default function AuthScreen({ navigation }) {
             <Text style={s.accessTitle}>ACCESS YOUR SYSTEM</Text>
             <Text style={s.accessDesc}>Continue your streak. Rebuild your village.</Text>
 
+            {/* Error Message Warning */}
+            {errorMessage ? (
+              <View style={s.errorBox}>
+                <Text style={s.errorText}>⚠ ERROR: {errorMessage}</Text>
+              </View>
+            ) : null}
+
             {/* Only show Display Name field if Creating a new account */}
             {!isLogin && (
               <>
@@ -122,7 +127,7 @@ export default function AuthScreen({ navigation }) {
                 <TextInput
                   style={[s.input, focusField === 'display' && s.inputFocus]}
                   value={displayName}
-                  onChangeText={setDisplayName}
+                  onChangeText={(v) => handleInputChange(setDisplayName, v)}
                   placeholder="COMMANDER_TAG"
                   placeholderTextColor={colors.onSurfaceVariant}
                   onFocus={() => setFocusField('display')}
@@ -136,7 +141,7 @@ export default function AuthScreen({ navigation }) {
             <TextInput
               style={[s.input, focusField === 'user' && s.inputFocus]}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={(v) => handleInputChange(setUsername, v)}
               placeholder="commander@habitopia.sys"
               placeholderTextColor={colors.onSurfaceVariant}
               keyboardType="email-address"
@@ -150,7 +155,7 @@ export default function AuthScreen({ navigation }) {
             <TextInput
               style={[s.input, focusField === 'pass' && s.inputFocus]}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(v) => handleInputChange(setPassword, v)}
               placeholder="********"
               placeholderTextColor={colors.onSurfaceVariant}
               secureTextEntry
@@ -174,7 +179,7 @@ export default function AuthScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Toggle */}
-            <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+            <TouchableOpacity onPress={handleToggle}>
               <Text style={s.toggleText}>
                 {isLogin ? 'NO SQUAD? [ ' : 'HAVE ACCOUNT? [ '}
                 <Text style={s.toggleBold}>{isLogin ? 'CREATE ONE' : 'LOGIN'}</Text>
@@ -213,6 +218,19 @@ const s = StyleSheet.create({
   },
   accessTitle: { fontFamily: fonts.headline, fontSize: 18, color: colors.onSurface, marginBottom: 6 },
   accessDesc: { fontFamily: fonts.body, fontSize: 13, color: colors.onSurfaceVariant, marginBottom: 20, lineHeight: 18 },
+  errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: colors.error,
+    padding: 10,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: colors.error,
+    fontFamily: fonts.label,
+    fontSize: 9,
+    letterSpacing: 1,
+  },
   inputLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginBottom: 5 },
   input: {
     backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outline,

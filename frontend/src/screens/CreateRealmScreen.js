@@ -4,7 +4,8 @@ import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import RPGInput from '../components/RPGInput';
 import RPGButton from '../components/RPGButton';
 import useAuthStore from '../store/authStore';
-import { collection, addDoc } from 'firebase/firestore';
+import useRealmStore from '../store/realmStore';
+import { collection, addDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const THEMES = ['CYBER', 'ARCANE', 'FORGE', 'NATURE'];
@@ -33,6 +34,17 @@ export default function CreateRealmScreen({ navigation }) {
       });
 
       console.log("Realm created with ID:", docRef.id);
+
+      // Update user's realm list
+      const userRef = doc(db, 'users', user.id || user.uid);
+      await updateDoc(userRef, {
+        realm_ids: arrayUnion(docRef.id)
+      });
+
+      // Initialize the store immediately for the new realm
+      const { fetchRealm } = useRealmStore.getState();
+      await fetchRealm(docRef.id);
+
       setIsCreating(false);
       navigation.replace('MainTabs');
     } catch (err) {

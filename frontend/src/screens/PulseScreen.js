@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import RPGButton from '../components/RPGButton';
 import RPGInput from '../components/RPGInput';
@@ -16,7 +16,7 @@ const PRESET_QUESTS = [
 const DIFFICULTY_LEVELS = ['EASY', 'MEDIUM', 'HARD', 'EXTREME'];
 
 export default function PulseScreen() {
-  const { habits, addHabit } = useHabitStore();
+  const { habits, addHabit, fetchHabits, toggleHabit, isLoading } = useHabitStore();
   const realm = useRealmStore((s) => s.realm);
   const [selectedPreset, setSelectedPreset] = useState(null);
   const [customName, setCustomName] = useState('');
@@ -28,6 +28,11 @@ export default function PulseScreen() {
     { id: 'cq2', name: 'COLD SHOWER', difficulty: 'HARD', status: 'accepted' },
   ]);
 
+  // Fetch habits on mount
+  useEffect(() => {
+    fetchHabits();
+  }, []);
+
   // Contribution from Main Quests only
   const mainQuestsCompleted = habits.filter((h) => h.completed).length;
   const mainQuestsTotal = habits.length;
@@ -35,14 +40,14 @@ export default function PulseScreen() {
 
   const handleAddPreset = (preset) => {
     setSelectedPreset(preset.id === selectedPreset ? null : preset.id);
+    // Actually add it as a real habit
+    addHabit(preset.name, preset.difficulty === 'HARD' ? 30 : 15, preset.icon);
   };
 
   const handleSubmitCustom = () => {
     if (!customName.trim()) return;
-    setPendingQuests((prev) => [
-      ...prev,
-      { id: 'cq' + Date.now(), name: customName.trim().toUpperCase(), difficulty: customDifficulty, status: 'pending' },
-    ]);
+    const xpVal = customDifficulty === 'EXTREME' ? 50 : customDifficulty === 'HARD' ? 30 : 15;
+    addHabit(customName.trim(), xpVal, '⚡');
     setCustomName('');
     setCustomDifficulty('MEDIUM');
     setModalVisible(false);
@@ -60,6 +65,35 @@ export default function PulseScreen() {
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* Section 0: REAL TIME QUEST LOG */}
+        <Text style={s.sectionLabel}>{'> '}QUEST_LOG:</Text>
+        <Text style={s.sectionDesc}>Check off your daily habits to contribute to Village HP</Text>
+
+        {isLoading ? (
+          <ActivityIndicator color={colors.secondary} style={{ padding: 20 }} />
+        ) : (
+          habits.map((h) => (
+            <TouchableOpacity
+              key={h.id}
+              style={[s.habitRow, h.completed && s.habitRowDone]}
+              onPress={() => toggleHabit(h.id)}
+              disabled={h.completed}
+              activeOpacity={0.7}
+            >
+              <View style={s.habitIconBox}>
+                <Text style={s.habitIconText}>{h.icon}</Text>
+              </View>
+              <View style={s.habitInfo}>
+                <Text style={s.habitName}>{h.title.toUpperCase()}</Text>
+                <Text style={s.habitXP}>+{h.xp} XP</Text>
+              </View>
+              <View style={[s.checkCircle, h.completed && s.checkCircleDone]}>
+                {h.completed && <Text style={s.checkMark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+
         {/* Section 1: Preset Quests */}
         <Text style={s.sectionLabel}>{'> '}PRESET_QUESTS:</Text>
         <Text style={s.sectionDesc}>Select from integrated habit trackers</Text>
@@ -129,7 +163,7 @@ export default function PulseScreen() {
         </View>
 
         {/* Warning Box */}
-        {realm.health < 95 && (
+        {realm && realm.health < 95 && (
           <View style={s.warningBox}>
             <Text style={s.warningTitle}>⚠ DECAY WARNING: VILLAGE AT RISK</Text>
             <Text style={s.warningText}>
@@ -189,6 +223,26 @@ const s = StyleSheet.create({
   },
   avatarText: { fontSize: 16 },
   scroll: { flex: 1, paddingHorizontal: 14 },
+
+  habitRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.outlineVariant, padding: 12, marginBottom: 8, gap: 12,
+  },
+  habitRowDone: { borderLeftWidth: 3, borderLeftColor: colors.secondary, opacity: 0.8 },
+  habitIconBox: {
+    width: 44, height: 44, backgroundColor: colors.surfaceContainer,
+    borderWidth: 1, borderColor: colors.outline, alignItems: 'center', justifyContent: 'center',
+  },
+  habitIconText: { fontSize: 24 },
+  habitInfo: { flex: 1 },
+  habitName: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 1.5 },
+  habitXP: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 1, marginTop: 2 },
+  checkCircle: {
+    width: 24, height: 24, borderWidth: 2, borderColor: colors.outline,
+    borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+  },
+  checkCircleDone: { borderColor: colors.secondary, backgroundColor: colors.secondaryContainer },
+  checkMark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
 
   // Sections
   sectionLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginTop: 16, marginBottom: 6 },

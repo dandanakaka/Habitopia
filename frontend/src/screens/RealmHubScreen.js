@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import useAuthStore from '../store/authStore';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function RealmHubScreen({ navigation }) {
-  const username = useAuthStore((s) => s.user?.displayName || s.user?.username);
+  const user = useAuthStore((s) => s.user);
+  const displayName = user?.displayName || 'COMMANDER';
 
   const options = [
     { title: 'CREATE REALM', icon: '🏰', desc: 'Forge a new village. You are the architect.', screen: 'CreateRealm' },
@@ -24,7 +27,7 @@ export default function RealmHubScreen({ navigation }) {
 
       <View style={s.container}>
         <Text style={s.greeting}>WELCOME BACK,</Text>
-        <Text style={s.username}>{username?.toUpperCase() || 'COMMANDER'}</Text>
+        <Text style={s.username}>{displayName.toUpperCase()}</Text>
         <Text style={s.sectionLabel}>{'> '}SELECT_ACTION:</Text>
 
         <View style={s.cardStack}>

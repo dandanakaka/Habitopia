@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -17,6 +17,10 @@ import PulseScreen from './src/screens/PulseScreen';
 import QuestsScreen from './src/screens/QuestsScreen';
 import VillageScreen from './src/screens/VillageScreen';
 import { colors, fonts } from './src/theme/theme';
+
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './src/firebase';
+import useAuthStore from './src/store/authStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -72,6 +76,7 @@ function MainTabs() {
 }
 
 export default function App() {
+  const { isAuthenticated, setUser } = useAuthStore();
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
@@ -79,6 +84,14 @@ export default function App() {
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
   });
+
+  // Listen for Auth State Changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+    });
+    return unsubscribe;
+  }, []);
 
   if (!fontsLoaded) {
     return (
@@ -113,13 +126,18 @@ export default function App() {
         }}
       >
         <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-          <Stack.Screen name="Auth" component={AuthScreen} />
-          <Stack.Screen name="RealmHub" component={RealmHubScreen} />
-          <Stack.Screen name="CreateRealm" component={CreateRealmScreen} />
-          <Stack.Screen name="JoinRealm" component={JoinRealmScreen} />
-          <Stack.Screen name="AccessRealm" component={AccessRealmScreen} />
-          <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen name="HabitWrapped" component={HabitWrappedScreen} />
+          {!isAuthenticated ? (
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          ) : (
+            <>
+              <Stack.Screen name="RealmHub" component={RealmHubScreen} />
+              <Stack.Screen name="CreateRealm" component={CreateRealmScreen} />
+              <Stack.Screen name="JoinRealm" component={JoinRealmScreen} />
+              <Stack.Screen name="AccessRealm" component={AccessRealmScreen} />
+              <Stack.Screen name="MainTabs" component={MainTabs} />
+              <Stack.Screen name="HabitWrapped" component={HabitWrappedScreen} />
+            </>
+          )}
         </Stack.Navigator>
       </NavigationContainer>
     </>

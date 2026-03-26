@@ -11,9 +11,9 @@ export default function ProfileModal({ visible, onClose }) {
   const memberProfiles = useRealmStore((s) => s.memberProfiles);
   const navigation = useNavigation();
 
-  const currentMember = memberProfiles.find((m) => m.id === user?.id) || memberProfiles[0];
-  const totalGroupXP = memberProfiles.reduce((sum, m) => sum + m.xp, 0);
-  const contributionPct = totalGroupXP > 0 ? Math.round((currentMember.xp / totalGroupXP) * 100) : 0;
+  const currentMember = memberProfiles.find((m) => m.id === user?.uid) || { xp: 0, streak: 0 };
+  const totalGroupXP = memberProfiles.reduce((sum, m) => sum + (m.xp || 0), 0);
+  const contributionPct = totalGroupXP > 0 ? Math.round(((currentMember.xp || 0) / totalGroupXP) * 100) : 0;
 
   const handleLogout = () => {
     onClose();

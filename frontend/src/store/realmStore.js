@@ -1,35 +1,105 @@
 import { create } from 'zustand';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
-const useRealmStore = create((set) => ({
-  realm: {
-    id: 'r1',
-    name: 'The Iron Village',
-    health: 85,
-    members: ['u1', 'u2'],
+const useRealmStore = create((set, get) => ({
+  realm: null,
+  memberProfiles: [],
+  inviteCode: null,
+  isLoading: false,
+  error: null,
+
+  unsubscribeRealm: null,
+  unsubscribeMembers: [],
+
+  // Set up real-time listeners for the realm and its members
+  fetchRealm: async (realmId) => {
+    if (!realmId) return;
+
+    // Cleanup previous listeners
+    const currentUnsubscribe = get().unsubscribeRealm;
+    if (currentUnsubscribe) currentUnsubscribe();
+    get().unsubscribeMembers.forEach(u => u());
+
+    set({ isLoading: true, error: null, memberProfiles: [] });
+
+    // 1. Listen to Realm document
+    const realmRef = doc(db, 'realms', realmId);
+    const unsubRealm = onSnapshot(realmRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        set({ error: 'Realm not found', isLoading: false });
+        return;
+      }
+
+      const realmData = {
+        id: snapshot.id,
+        health: 100, // Default to 100
+        ...snapshot.data()
+      };
+      set({ realm: realmData, isLoading: false });
+
+      // 2. Setup/Update member listeners if necessary
+      const currentMemberIds = get().memberProfiles.map(m => m.id).sort().join(',');
+      const newMemberIds = (realmData.members || []).sort().join(',');
+
+      if (currentMemberIds !== newMemberIds) {
+        // Members list changed, rebuild listeners
+        get().setupMemberListeners(realmData.members || []);
+      }
+    }, (err) => {
+      set({ error: err.message, isLoading: false });
+    });
+
+    set({ unsubscribeRealm: unsubRealm });
   },
 
-  memberProfiles: [
-    { id: 'u1', username: 'player_one', xp: 1250, habitsCompleted: 42, streak: 7 },
-    { id: 'u2', username: 'shadow_knight', xp: 980, habitsCompleted: 35, streak: 5 },
-  ],
+  setupMemberListeners: (memberIds) => {
+    // Kill old ones
+    get().unsubscribeMembers.forEach(u => u());
+    const newUnsubs = [];
 
-  inviteLink: null,
+    memberIds.forEach(uid => {
+      const uRef = doc(db, 'users', uid);
+      const uUnsub = onSnapshot(uRef, (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          const p = {
+            id: snap.id,
+            username: d.displayName || d.email?.split('@')[0] || 'Unknown',
+            xp: d.xp ?? d.XP ?? 0,
+            habitsCompleted: d.habitsCompleted ?? d.completions ?? 0,
+            streak: d.streak ?? 0,
+          };
 
-  setRealm: (realm) => set({ realm }),
+          set(state => ({
+            memberProfiles: state.memberProfiles.some(existing => existing.id === p.id)
+              ? state.memberProfiles.map(existing => existing.id === p.id ? p : existing)
+              : [...state.memberProfiles, p]
+          }));
+        }
+      });
+      newUnsubs.push(uUnsub);
+    });
 
-  generateInviteLink: () => {
-    const link = `habitopia://join/r1?code=${Math.random().toString(36).substr(2, 8)}`;
-    set({ inviteLink: link });
-    return link;
+    set({ unsubscribeMembers: newUnsubs });
   },
 
-  updateHealth: (delta) =>
-    set((state) => ({
-      realm: {
-        ...state.realm,
-        health: Math.max(0, Math.min(100, state.realm.health + delta)),
-      },
-    })),
+  // Returns exactly the Realm's Firestore ID
+  generateInviteCode: () => {
+    const currentState = get();
+    if (currentState.realm?.id) {
+      set({ inviteCode: currentState.realm.id });
+      return currentState.realm.id;
+    }
+    return null;
+  },
+
+  cleanup: () => {
+    const s = get();
+    if (s.unsubscribeRealm) s.unsubscribeRealm();
+    s.unsubscribeMembers.forEach(u => u());
+    set({ realm: null, memberProfiles: [], unsubscribeRealm: null, unsubscribeMembers: [] });
+  }
 }));
 
 export default useRealmStore;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import ProgressBar from '../components/ProgressBar';
 import RPGButton from '../components/RPGButton';
@@ -8,13 +8,21 @@ import useRealmStore from '../store/realmStore';
 import useHabitStore from '../store/habitStore';
 import useAuthStore from '../store/authStore';
 
+// Castle Assets
+const CASTLE_1 = require('../../assets/castle-1.png');
+const CASTLE_2 = require('../../assets/castle-2.png');
+const CASTLE_3 = require('../../assets/castle-3.png');
+const CASTLE_4 = require('../../assets/castle-4.png');
+const CASTLE_5 = require('../../assets/castle-5.png');
+
 function getVillageState(health) {
-  if (health >= 80) return { icon: '🏰✨', label: 'THRIVING', tier: 5 };
-  if (health >= 60) return { icon: '🏰', label: 'STRONG', tier: 4 };
-  if (health >= 40) return { icon: '🏠', label: 'STABLE', tier: 3 };
-  if (health >= 20) return { icon: '🏗️', label: 'WEAK', tier: 2 };
-  return { icon: '🏚️', label: 'DECAYED', tier: 1 };
+  if (health >= 80) return { asset: CASTLE_1, label: 'THRIVING', tier: 5 };
+  if (health >= 60) return { asset: CASTLE_2, label: 'STRONG', tier: 4 };
+  if (health >= 40) return { asset: CASTLE_3, label: 'STABLE', tier: 3 };
+  if (health >= 20) return { asset: CASTLE_4, label: 'WEAK', tier: 2 };
+  return { asset: CASTLE_5, label: 'DECAYED', tier: 1 };
 }
+
 
 export default function VillageScreen({ navigation }) {
   const { realm, memberProfiles, inviteCode, generateInviteCode, isLoading } = useRealmStore();
@@ -63,10 +71,12 @@ export default function VillageScreen({ navigation }) {
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Realm Header with Village State */}
         <View style={s.realmHeader}>
-          <Text style={s.villageIcon}>{villageState.icon}</Text>
+          <Image source={villageState.asset} style={s.villageIcon} resizeMode="cover" />
+
           <Text style={s.realmName}>{rName.toUpperCase()}</Text>
           <Text style={s.realmId}>REALM_ID: {realm.id.toUpperCase()} // {membersCount} MEMBERS</Text>
         </View>
+
 
         {/* Village State Indicator */}
         <View style={s.stateRow}>
@@ -173,9 +183,14 @@ const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 14 },
 
   // Realm Header
-  realmHeader: { alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant },
-  villageIcon: { fontSize: 40, marginBottom: 4 },
+  realmHeader: { alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.outlineVariant, overflow: 'hidden' },
+  villageIcon: { width: 200, height: 200, marginTop: 50 },
+
+
+
+
   realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3 },
+
   realmId: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 2, marginTop: 2 },
 
   // Village State Indicator

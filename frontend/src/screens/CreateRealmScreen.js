@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
 import RPGInput from '../components/RPGInput';
 import RPGButton from '../components/RPGButton';
+import useAuthStore from '../store/authStore';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const THEMES = ['CYBER', 'ARCANE', 'FORGE', 'NATURE'];
 
@@ -10,10 +13,33 @@ export default function CreateRealmScreen({ navigation }) {
   const [realmName, setRealmName] = useState('');
   const [memberCount, setMemberCount] = useState(3);
   const [selectedTheme, setSelectedTheme] = useState('CYBER');
+  const [isCreating, setIsCreating] = useState(false);
+  const user = useAuthStore((s) => s.user);
 
-  const handleCreate = () => {
-    if (!realmName.trim()) return;
-    navigation.replace('MainTabs');
+  const handleCreate = async () => {
+    if (!realmName.trim() || !user) return;
+
+    setIsCreating(true);
+    try {
+      // Create realm document in Firebase
+      const docRef = await addDoc(collection(db, 'realms'), {
+        names: realmName.trim(), // As requested: names field (realm name)
+        members: [user.id || user.uid], // As requested: members field with just one user
+        health: 100, // As requested: health field as 100
+        total_xp: 0, // As requested: total_xp as 0
+        completions: 0, // As requested: no.of completes field as 0
+        habit_ids: 0, // As requested: habit ids as 0
+        total_members: memberCount // As requested: total_members as chose by user button
+      });
+
+      console.log("Realm created with ID:", docRef.id);
+      setIsCreating(false);
+      navigation.replace('MainTabs');
+    } catch (err) {
+      console.error("Error creating realm:", err);
+      Alert.alert("Error", "Could not create realm. Please try again.");
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -73,10 +99,10 @@ export default function CreateRealmScreen({ navigation }) {
         </View>
 
         <RPGButton
-          title="CREATE_REALM"
+          title={isCreating ? "CREATING..." : "CREATE_REALM"}
           variant="primary"
           onPress={handleCreate}
-          disabled={!realmName.trim()}
+          disabled={!realmName.trim() || isCreating}
           style={s.ctaBtn}
         />
         <View style={{ height: 30 }} />

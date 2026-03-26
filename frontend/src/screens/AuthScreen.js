@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, Image, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { colors, fonts, spacing, shape } from '../theme/theme';
 import useAuthStore from '../store/authStore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 export default function AuthScreen({ navigation }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,17 +12,88 @@ export default function AuthScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [focusField, setFocusField] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
 
-  const handleSubmit = () => {
-    if (!username.trim() || !password.trim() || !displayName.trim()) return;
-    login(username.trim(), password, displayName.trim());
-    navigation.replace('RealmHub');
+  const handleSubmit = async () => {
+    const emailStr = username.trim();
+    const passStr = password.trim();
+
+    // Basic validation
+    if (!emailStr || !passStr) {
+      Alert.alert("Missing Fields", "Please enter your email and password.");
+      return;
+    }
+    if (!isLogin && !displayName.trim()) {
+      Alert.alert("Missing Fields", "Please enter a display name for your new account.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      if (isLogin) {
+        // ----- LOGIN FLOW -----
+        const userCredential = await signInWithEmailAndPassword(auth, emailStr, passStr);
+        const fbUser = userCredential.user;
+
+        // Fetch their user document to get the display name
+        const userDocRef = doc(db, 'users', fbUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        let storedData = {};
+        if (userDoc.exists()) {
+          storedData = userDoc.data();
+        }
+
+        // Pass their persistent UID to the app-wide store
+        login({
+          uid: fbUser.uid,
+          email: fbUser.email,
+          displayName: storedData.displayName || fbUser.displayName || emailStr.split('@')[0],
+          realm_id: storedData.realm_id || null,
+        });
+
+      } else {
+        // ----- SIGNUP FLOW -----
+        const userCredential = await createUserWithEmailAndPassword(auth, emailStr, passStr);
+        const fbUser = userCredential.user;
+
+        // Save exactly the fields requested to the 'users' collection
+        const newUserDoc = {
+          uid: fbUser.uid,
+          displayName: displayName.trim(),
+          email: emailStr,
+          password: passStr, // Note: Storing plain text passwords is a security risk, but added as requested
+          realm_id: null // Initialize with no squad
+        };
+
+        // Write to Firestore database -> 'users' collection -> document ID = their Firebase UID
+        await setDoc(doc(db, 'users', fbUser.uid), newUserDoc);
+
+        // Pass to the app-wide store
+        login(newUserDoc);
+      }
+
+      setIsLoading(false);
+      navigation.replace('RealmHub');
+
+    } catch (error) {
+      setIsLoading(false);
+      console.error("Firebase Auth Error:", error);
+
+      // Friendly error messages
+      let msg = error.message;
+      if (error.code === 'auth/email-already-in-use') msg = "That email already has an account. Switch to Login.";
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') msg = "Incorrect email or password.";
+
+      Alert.alert("Authentication Failed", msg);
+    }
   };
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* System Top Bar — no power button */}
+      {/* System Top Bar */}
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
           <Text style={s.topBarIcon}>⬡</Text>
@@ -36,22 +110,27 @@ export default function AuthScreen({ navigation }) {
             <Text style={s.heroSub}>SYSTEM_INIT // AUTHENTICATION</Text>
           </View>
 
-          {/* Auth Card — purple dashed border */}
+          {/* Auth Card */}
           <View style={s.authCard}>
             <Text style={s.accessTitle}>ACCESS YOUR SYSTEM</Text>
             <Text style={s.accessDesc}>Continue your streak. Rebuild your village.</Text>
 
-            <Text style={s.inputLabel}>{'> '}DISPLAY_NAME</Text>
-            <TextInput
-              style={[s.input, focusField === 'display' && s.inputFocus]}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="COMMANDER_TAG"
-              placeholderTextColor={colors.onSurfaceVariant}
-              onFocus={() => setFocusField('display')}
-              onBlur={() => setFocusField(null)}
-              selectionColor={colors.secondary}
-            />
+            {/* Only show Display Name field if Creating a new account */}
+            {!isLogin && (
+              <>
+                <Text style={s.inputLabel}>{'> '}DISPLAY_NAME</Text>
+                <TextInput
+                  style={[s.input, focusField === 'display' && s.inputFocus]}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="COMMANDER_TAG"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  onFocus={() => setFocusField('display')}
+                  onBlur={() => setFocusField(null)}
+                  selectionColor={colors.secondary}
+                />
+              </>
+            )}
 
             <Text style={s.inputLabel}>{'> '}USER_ID / EMAIL</Text>
             <TextInput
@@ -60,6 +139,8 @@ export default function AuthScreen({ navigation }) {
               onChangeText={setUsername}
               placeholder="commander@habitopia.sys"
               placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="email-address"
+              autoCapitalize="none"
               onFocus={() => setFocusField('user')}
               onBlur={() => setFocusField(null)}
               selectionColor={colors.secondary}
@@ -79,8 +160,17 @@ export default function AuthScreen({ navigation }) {
             />
 
             {/* Submit */}
-            <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.8}>
-              <Text style={s.submitText}>INITIALIZE SESSION</Text>
+            <TouchableOpacity
+              style={[s.submitBtn, isLoading && s.submitBtnDisabled]}
+              onPress={handleSubmit}
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#000000" size="small" />
+              ) : (
+                <Text style={s.submitText}>{isLogin ? 'LOGIN' : 'SIGN UP'}</Text>
+              )}
             </TouchableOpacity>
 
             {/* Toggle */}
@@ -134,6 +224,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.secondary, paddingVertical: 14, alignItems: 'center',
     borderRadius: shape.radius, marginTop: 4, marginBottom: 16,
   },
+  submitBtnDisabled: { opacity: 0.5 },
   submitText: { fontFamily: fonts.headline, fontSize: 15, color: '#000000', letterSpacing: 3 },
   toggleText: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, textAlign: 'center', letterSpacing: 1 },
   toggleBold: { color: colors.onSurface, textDecorationLine: 'underline' },

@@ -5,19 +5,15 @@ const useAuthStore = create((set) => ({
   token: null,
   isAuthenticated: false,
 
-  login: (username, password, displayName) => {
-    // Mock login — no backend
-    const mockUser = {
-      id: 'u1',
-      username: username,
-      displayName: displayName || username,
-      realm_id: 'r1',
-    };
-    const mockToken = 'mock-jwt-token-' + Date.now();
-
+  login: (userData) => {
     set({
-      user: mockUser,
-      token: mockToken,
+      user: {
+        uid: userData.uid, // Always keep the Firebase UID
+        email: userData.email,
+        displayName: userData.displayName || userData.email,
+        realm_id: userData.realm_id || null, // Can be updated later when they join a realm
+      },
+      token: 'jwt-placeholder', // In a real app, use user.getIdToken()
       isAuthenticated: true,
     });
   },

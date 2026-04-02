@@ -1,40 +1,164 @@
-# Habitopia
+🏰 Habitopia
+Where habits become shared systems.
 
-Habitopia is a gamified, sci-fi-themed habit-tracking mobile application designed to turn daily goals into an RPG-style adventure. Users can maintain streaks, earn XP, level up, and collaborate in "Realms" (squads) with their friends to conquer challenges together.
+Habitopia is a social, gamified habit tracking platform that transforms personal discipline into a collaborative experience.
+Instead of tracking habits alone, users operate within small groups (“realms”), where every action contributes to a shared village state.
 
-## Tech Stack
+🚀 Core Idea
+Traditional habit apps rely on self-motivation.
 
-### Frontend (Mobile App)
-- **Framework**: React Native (Expo
-- **Authentication**: Firebase Authentication (Email/Password & Global state `authStore`)
-- **Database Access**: Direct Firestore integration for real-time reads/writes (Realms, Users, HabitLogs).
-- **Styling**: Custom theming (Dark sci-fi RPG UI: `colors, fonts, spacing, shape` in `/theme`)
+Habitopia introduces:
 
-### Backend (Python Service)
-- **Framework**: FastAPI
-- **XP Engine**: Custom gamification engine calculating XP gains, streaks, and health decay.
-- **Database Integration**: Firebase Admin SDK
+Social accountability
 
-## Key Features
-- **User Authentication**: Custom Manual Login/Signup flow heavily integrated with Firebase Auth and Firestore.
-- **Realm System**: Create a squad (village), track collective health, member count, and total XP. Real-time Firebase database document management entirely from the frontend.
-- **Dynamic Action UI**: Cyber/Retro game aesthetic utilizing custom typography (e.g., ShareTechMono) and sleek layout design.
+Shared consequences
 
-## How to Run
+Real-time feedback
 
-### Frontend
-```bash
-cd frontend
+👉 Your habits don’t just affect you — they affect your entire team.
+
+🎮 Features
+🏰 Village System
+Shared group environment (3–5 users)
+
+Village health reflects collective consistency
+
+Visual state evolves based on performance
+
+👑 Main Quests (Core Habits)
+Automated tracking via:
+
+GitHub
+
+LeetCode
+
+Strava
+
+Custom habit creation
+
+Drives core contribution score
+
+⚔️ Friend Quests (Social Layer)
+Interactive group challenges
+
+Real-time contribution updates
+
+Direct impact on village health
+
+⚠️ Decay System
+Missed main quests → village health drops
+
+Creates urgency and accountability
+
+📊 Real-Time Feedback
+XP system
+
+Contribution %
+
+Streak tracking
+
+Live updates across users
+
+📅 Monthly “Habit Wrapped”
+Realm-level performance summary
+
+Highlights:
+
+Top contributors
+
+Consistency trends
+
+Failure points
+
+🧱 Tech Stack
+📱 Frontend
+React Native (Expo)
+
+⚙️ Backend
+FastAPI (Python)
+
+🗄️ Database
+MongoDB Atlas
+
+🔄 Real-Time Layer
+Firebase Realtime DB / Firestore
+
+🔌 Integrations
+GitHub API
+
+LeetCode (unofficial API)
+
+Strava API
+
+⚙️ System Architecture
+User Action
+   ↓
+Frontend (React Native)
+   ↓
+FastAPI Backend (Business Logic)
+   ↓
+MongoDB (Source of Truth)
+   ↓
+Firebase (Real-time Sync)
+   ↓
+Frontend UI Update
+🔄 Core Loop
+Main Quests → XP →
+Friend Quests → Contribution →
+Contribution → Village Health →
+Village Health → Feedback →
+Feedback → User Behavior
+🧠 Why Habitopia?
+❌ No accountability → solved with group pressure
+
+❌ Boring tracking → solved with gamification
+
+❌ High drop-off → solved with shared consequences
+
+👉 Built using behavioral psychology + system design
+
+📦 Getting Started
+1. Clone the repo
+git clone https://github.com/your-repo/habitopia.git
+cd habitopia
+2. Frontend setup
+cd habitopia-app
 npm install
-npx expo start --clear
-```
-
-### Backend
-Make sure you have a `habitopia-service-account.json` in the `/backend` directory.
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
+npx expo start
+3. Backend setup
+cd habitopia-backend
 pip install -r requirements.txt
 uvicorn main:app --reload
-```
+🧪 MVP Scope
+Auth (Google login)
+
+Realm creation & joining
+
+Quest tracking (manual + API)
+
+Village health system
+
+Real-time updates
+
+🛠️ Future Improvements
+AI-driven habit recommendations
+
+Advanced analytics dashboard
+
+Push notifications & reminders
+
+Cross-realm competitions
+
+👥 Team
+Frontend: Stitch + Antigravity MCP
+
+Backend: FastAPI + MongoDB
+
+Integrations: GitHub / LeetCode / Strava
+
+🏁 Final Note
+Habitopia isn’t just a productivity tool.
+
+It’s a system where behavior is visible, shared, and consequential.
+
+“When your habits affect others — you show up.” 🔥

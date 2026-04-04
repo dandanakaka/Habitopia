@@ -54,12 +54,9 @@ export default function AuthScreen({ navigation }) {
         const userCredential = await createUserWithEmailAndPassword(auth, emailStr, passStr);
         const fbUser = userCredential.user;
 
-        // Save exactly the fields requested to the 'users' collection
+        // Save user profile fields to the 'users' collection
         const newUserDoc = {
-          uid: fbUser.uid,
           displayName: displayName.trim(),
-          email: emailStr,
-          password: passStr, // Note: Storing plain text passwords is a security risk, but added as requested
           realm_ids: [],
           xp: 0,
           habitsCompleted: 0,

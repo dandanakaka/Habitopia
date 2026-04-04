@@ -1,91 +1,93 @@
 import { create } from 'zustand';
-import fetchWithAuth from '../apiClient';
+import { db } from '../firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+
+const INTEGRATED_TYPES = ['leetcode', 'strava', 'github'];
 
 const useHabitStore = create((set, get) => ({
   habits: [],
   isLoading: false,
 
-  fetchHabits: async () => {
+  // Fetch habits from Firestore using the realm's habit_ids, filtered by current user
+  fetchHabits: async (realmId, userId) => {
+    if (!realmId || !userId) return;
     set({ isLoading: true });
+
     try {
-      const data = await fetchWithAuth('/pulse/habits');
-      // Format data to match UI
-      const formatted = data.map(h => ({
-        id: h.habit_id,
-        title: h.title,
+      // 1. Get the realm doc to find habit_ids
+      const realmSnap = await getDoc(doc(db, 'realms', realmId));
+      if (!realmSnap.exists()) {
+        set({ habits: [], isLoading: false });
+        return;
+      }
+
+      const habitIds = realmSnap.data().habit_ids || [];
+      if (!Array.isArray(habitIds) || habitIds.length === 0) {
+        set({ habits: [], isLoading: false });
+        return;
+      }
+
+      // 2. Fetch each habit doc, keep only ones belonging to this user
+      const habitDocs = await Promise.all(
+        habitIds.map(async (id) => {
+          try {
+            const snap = await getDoc(doc(db, 'habits', id));
+            if (snap.exists() && snap.data().user_id === userId) {
+              return { id: snap.id, ...snap.data() };
+            }
+          } catch (e) {
+            console.error('Error fetching habit', id, e);
+          }
+          return null;
+        })
+      );
+
+      const userHabits = habitDocs.filter(Boolean).map(h => ({
+        id: h.id,
+        title: h.title || 'Untitled',
+        type: h.type || 'custom',
         xp: h.xp_value || 10,
-        completed: false, // By default we assume not completed today for now
         streak: h.streak || 0,
-        icon: h.icon || '⚡',
+        status: h.status || 0,
+        completed: h.status === 1,
+        isIntegrated: INTEGRATED_TYPES.includes(h.type),
       }));
-      set({ habits: formatted, isLoading: false });
+
+      set({ habits: userHabits, isLoading: false });
     } catch (err) {
-      console.error('Failed to fetch habits', err);
+      console.error('Failed to fetch habits from Firestore', err);
       set({ isLoading: false });
     }
   },
 
-  addHabit: async (title, xp, icon) => {
-    const newId = 'habit_' + Date.now();
-    const xpVal = xp || 25;
+  // Toggle a custom habit's completion (status: 0 <-> 1)
+  toggleHabit: async (habitId) => {
+    const habit = get().habits.find(h => h.id === habitId);
+    if (!habit || habit.isIntegrated) return;
+
+    const newStatus = habit.completed ? 0 : 1;
+    const newCompleted = !habit.completed;
 
     // Optimistic UI update
     set((state) => ({
-      habits: [
-        ...state.habits,
-        { id: newId, title, xp: xpVal, completed: false, streak: 0, icon: icon || '⚡' }
-      ]
+      habits: state.habits.map((h) =>
+        h.id === habitId ? { ...h, completed: newCompleted, status: newStatus } : h
+      ),
     }));
 
     try {
-      // The API uses query params for this POST
-      await fetchWithAuth(`/pulse/habits?habit_id=${newId}&title=${encodeURIComponent(title)}&xp_value=${xpVal}`, {
-        method: 'POST'
+      await updateDoc(doc(db, 'habits', habitId), {
+        status: newStatus,
+        lastUpdated: serverTimestamp(),
       });
     } catch (err) {
-      console.error('Failed to add habit to API', err);
-    }
-  },
-
-  toggleHabit: async (id) => {
-    const state = get();
-    const habit = state.habits.find(h => h.id === id);
-    if (!habit) return;
-
-    if (!habit.completed) {
-      // Optimistic UI
+      console.error('Failed to update habit status', err);
+      // Rollback
       set((state) => ({
-        habits: state.habits.map((h) => h.id === id ? { ...h, completed: true } : h),
+        habits: state.habits.map((h) =>
+          h.id === habitId ? { ...h, completed: habit.completed, status: habit.status } : h
+        ),
       }));
-
-      try {
-        await fetchWithAuth(`/pulse/habits/${id}/log`, { method: 'POST' });
-        // After this POST, the User's XP and habitsCompleted automatically increase in Firestore!
-      } catch (err) {
-        console.error('Failed to log habit completion', err);
-        // Rollback UI
-        set((state) => ({
-          habits: state.habits.map((h) => h.id === id ? { ...h, completed: false } : h),
-        }));
-      }
-    }
-  },
-
-  editHabit: (id, updates) =>
-    set((state) => ({
-      habits: state.habits.map((h) => (h.id === id ? { ...h, ...updates } : h)),
-    })),
-
-  removeHabit: async (id) => {
-    // Optimistic UI
-    set((state) => ({
-      habits: state.habits.filter((h) => h.id !== id),
-    }));
-
-    try {
-      await fetchWithAuth(`/pulse/habits/${id}`, { method: 'DELETE' });
-    } catch (err) {
-      console.error('Failed to delete habit', err);
     }
   },
 }));

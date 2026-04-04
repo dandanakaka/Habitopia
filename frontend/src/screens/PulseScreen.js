@@ -1,57 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors, fonts, spacing, shape, glow } from '../theme/theme';
-import RPGButton from '../components/RPGButton';
-import RPGInput from '../components/RPGInput';
 import ProfileModal from '../components/ProfileModal';
 import useHabitStore from '../store/habitStore';
 import useRealmStore from '../store/realmStore';
+import useAuthStore from '../store/authStore';
 
-const PRESET_QUESTS = [
-  { id: 'pq1', name: 'GITHUB', icon: '💻', desc: 'Track daily commits and PRs', difficulty: 'MEDIUM' },
-  { id: 'pq2', name: 'LEETCODE', icon: '🧠', desc: 'Solve daily coding challenges', difficulty: 'HARD' },
-  { id: 'pq3', name: 'STRAVA', icon: '🏃', desc: 'Log workouts and runs', difficulty: 'EASY' },
-];
-
-const DIFFICULTY_LEVELS = ['EASY', 'MEDIUM', 'HARD', 'EXTREME'];
+const HABIT_ICONS = {
+  github: '💻',
+  leetcode: '🧠',
+  strava: '🏃',
+  custom: '⚡',
+};
 
 export default function PulseScreen() {
-  const { habits, addHabit, fetchHabits, toggleHabit, isLoading } = useHabitStore();
+  const { habits, fetchHabits, toggleHabit, isLoading } = useHabitStore();
   const realm = useRealmStore((s) => s.realm);
-  const [selectedPreset, setSelectedPreset] = useState(null);
-  const [customName, setCustomName] = useState('');
-  const [customDifficulty, setCustomDifficulty] = useState('MEDIUM');
-  const [modalVisible, setModalVisible] = useState(false);
+  const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
-  const [pendingQuests, setPendingQuests] = useState([
-    { id: 'cq1', name: 'DAILY PUSHUPS', difficulty: 'MEDIUM', status: 'pending' },
-    { id: 'cq2', name: 'COLD SHOWER', difficulty: 'HARD', status: 'accepted' },
-  ]);
 
-  // Fetch habits on mount
+  // Fetch habits from Firestore when realm/user are available
   useEffect(() => {
-    fetchHabits();
-  }, []);
+    if (realm?.id && user?.uid) {
+      fetchHabits(realm.id, user.uid);
+    }
+  }, [realm?.id, user?.uid]);
 
-  // Contribution from Main Quests only
-  const mainQuestsCompleted = habits.filter((h) => h.completed).length;
-  const mainQuestsTotal = habits.length;
-  const contribution = mainQuestsTotal > 0 ? Math.round((mainQuestsCompleted / mainQuestsTotal) * 100) : 0;
-
-  const handleAddPreset = (preset) => {
-    setSelectedPreset(preset.id === selectedPreset ? null : preset.id);
-    // Actually add it as a real habit
-    addHabit(preset.name, preset.difficulty === 'HARD' ? 30 : 15, preset.icon);
-  };
-
-  const handleSubmitCustom = () => {
-    if (!customName.trim()) return;
-    const xpVal = customDifficulty === 'EXTREME' ? 50 : customDifficulty === 'HARD' ? 30 : 15;
-    addHabit(customName.trim(), xpVal, '⚡');
-    setCustomName('');
-    setCustomDifficulty('MEDIUM');
-    setModalVisible(false);
-  };
+  // Contribution calculation
+  const totalHabits = habits.length;
+  const completedHabits = habits.filter((h) => h.completed).length;
+  const contribution = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 0;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -61,92 +39,74 @@ export default function PulseScreen() {
           <Text style={s.topBarGrid}>◎</Text>
           <Text style={s.topBarTitle}>MAIN_QUESTS</Text>
         </View>
-        <TouchableOpacity onPress={() => setShowProfile(true)} style={s.avatar}><Text style={s.avatarText}>🧙</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowProfile(true)} style={s.avatar}>
+          <Text style={s.avatarText}>🧙</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Section 0: REAL TIME QUEST LOG */}
         <Text style={s.sectionLabel}>{'> '}QUEST_LOG:</Text>
-        <Text style={s.sectionDesc}>Check off your daily habits to contribute to Village HP</Text>
+        <Text style={s.sectionDesc}>Complete your daily habits to contribute to Village HP</Text>
 
         {isLoading ? (
           <ActivityIndicator color={colors.secondary} style={{ padding: 20 }} />
+        ) : habits.length === 0 ? (
+          <View style={s.emptyBox}>
+            <Text style={s.emptyText}>NO HABITS FOUND FOR THIS REALM</Text>
+            <Text style={s.emptySubtext}>Create or join a realm and select habits to get started.</Text>
+          </View>
         ) : (
-          habits.map((h) => (
-            <TouchableOpacity
-              key={h.id}
-              style={[s.habitRow, h.completed && s.habitRowDone]}
-              onPress={() => toggleHabit(h.id)}
-              disabled={h.completed}
-              activeOpacity={0.7}
-            >
-              <View style={s.habitIconBox}>
-                <Text style={s.habitIconText}>{h.icon}</Text>
-              </View>
-              <View style={s.habitInfo}>
-                <Text style={s.habitName}>{h.title.toUpperCase()}</Text>
-                <Text style={s.habitXP}>+{h.xp} XP</Text>
-              </View>
-              <View style={[s.checkCircle, h.completed && s.checkCircleDone]}>
-                {h.completed && <Text style={s.checkMark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
+          habits.map((h) => {
+            const icon = HABIT_ICONS[h.type] || '⚡';
 
-        {/* Section 1: Preset Quests */}
-        <Text style={s.sectionLabel}>{'> '}PRESET_QUESTS:</Text>
-        <Text style={s.sectionDesc}>Select from integrated habit trackers</Text>
+            if (h.isIntegrated) {
+              // Integrated habit — non-checkable, shows message
+              return (
+                <View key={h.id} style={[s.habitRow, h.completed && s.habitRowDone]}>
+                  <View style={s.habitIconBox}>
+                    <Text style={s.habitIconText}>{icon}</Text>
+                  </View>
+                  <View style={s.habitInfo}>
+                    <Text style={s.habitName}>{h.title.toUpperCase()}</Text>
+                    {h.completed ? (
+                      <Text style={s.habitCompleteMsg}>✓ VERIFIED • +{h.xp} XP</Text>
+                    ) : (
+                      <Text style={s.habitPendingMsg}>FINISH YOUR HABIT TO EARN +{h.xp} XP</Text>
+                    )}
+                  </View>
+                  <View style={[s.statusIndicator, h.completed && s.statusVerified]}>
+                    <Text style={[s.statusIndicatorText, h.completed && { color: colors.secondary }]}>
+                      {h.completed ? '✓' : '⏳'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            }
 
-        <View style={s.presetGrid}>
-          {PRESET_QUESTS.map((pq) => {
-            const isSelected = selectedPreset === pq.id;
+            // Custom habit — checkable
             return (
               <TouchableOpacity
-                key={pq.id}
-                style={[s.presetCard, isSelected && s.presetCardActive]}
-                onPress={() => handleAddPreset(pq)}
+                key={h.id}
+                style={[s.habitRow, h.completed && s.habitRowDone]}
+                onPress={() => toggleHabit(h.id)}
                 activeOpacity={0.7}
               >
-                {isSelected && (
-                  <View style={s.activeBadge}><Text style={s.activeBadgeText}>SELECTED</Text></View>
-                )}
-                <Text style={s.presetIcon}>{pq.icon}</Text>
-                <Text style={s.presetName}>{pq.name}</Text>
-                <Text style={s.presetDesc}>{pq.desc}</Text>
-                <View style={s.diffBadge}>
-                  <Text style={[s.diffText, pq.difficulty === 'HARD' && { color: colors.error }, pq.difficulty === 'EASY' && { color: colors.secondary }]}>
-                    {pq.difficulty}
-                  </Text>
+                <View style={s.habitIconBox}>
+                  <Text style={s.habitIconText}>{icon}</Text>
+                </View>
+                <View style={s.habitInfo}>
+                  <Text style={s.habitName}>{h.title.toUpperCase()}</Text>
+                  <Text style={s.habitXP}>+{h.xp} XP</Text>
+                </View>
+                <View style={[s.checkCircle, h.completed && s.checkCircleDone]}>
+                  {h.completed && <Text style={s.checkMark}>✓</Text>}
                 </View>
               </TouchableOpacity>
             );
-          })}
-        </View>
+          })
+        )}
 
-        {/* Section 2: Custom Quest */}
-        <Text style={s.sectionLabel}>{'> '}CUSTOM_QUEST:</Text>
-        <TouchableOpacity style={s.addCustomBtn} onPress={() => setModalVisible(true)} activeOpacity={0.7}>
-          <Text style={s.addCustomText}>+ CREATE_CUSTOM_QUEST</Text>
-        </TouchableOpacity>
-
-        {/* Section 3: Group Consensus */}
-        <Text style={s.sectionLabel}>{'> '}GROUP_CONSENSUS:</Text>
-        {pendingQuests.map((q) => (
-          <View key={q.id} style={s.consensusRow}>
-            <View style={s.consensusInfo}>
-              <Text style={s.consensusName}>{q.name}</Text>
-              <Text style={s.consensusDiff}>{q.difficulty}</Text>
-            </View>
-            <View style={[s.statusBadge, q.status === 'accepted' && s.statusAccepted]}>
-              <Text style={[s.statusText, q.status === 'accepted' && s.statusTextAccepted]}>
-                {q.status === 'accepted' ? '✓ ACCEPTED' : '⏳ PENDING'}
-              </Text>
-            </View>
-          </View>
-        ))}
-
-        {/* Contribution Level (Main Quests Only) */}
+        {/* Contribution Level */}
         <View style={s.contribBox}>
           <Text style={s.contribLabel}>{'> '}CONTRIBUTION_LEVEL:</Text>
           <View style={s.sliderRow}>
@@ -158,7 +118,7 @@ export default function PulseScreen() {
           </View>
           <View style={s.contribRow}>
             <Text style={s.contribValue}>{contribution}%</Text>
-            <Text style={s.contribXP}>MAIN QUESTS ONLY</Text>
+            <Text style={s.contribXP}>{completedHabits}/{totalHabits} COMPLETED</Text>
           </View>
         </View>
 
@@ -174,34 +134,6 @@ export default function PulseScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
-
-      {/* Custom Quest Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>{'> '}NEW_CUSTOM_QUEST</Text>
-            <RPGInput label="QUEST_NAME" value={customName} onChangeText={setCustomName} placeholder="e.g. Daily Pushups" />
-
-            <Text style={s.fieldLabel}>{'> '}DIFFICULTY</Text>
-            <View style={s.chipRow}>
-              {DIFFICULTY_LEVELS.map((diff) => (
-                <TouchableOpacity
-                  key={diff}
-                  style={[s.chip, customDifficulty === diff && s.chipActive]}
-                  onPress={() => setCustomDifficulty(diff)}
-                >
-                  <Text style={[s.chipText, customDifficulty === diff && s.chipTextActive]}>{diff}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={s.modalActions}>
-              <RPGButton title="CANCEL" variant="ghost" onPress={() => setModalVisible(false)} style={{ flex: 1 }} />
-              <RPGButton title="SUBMIT" variant="primary" onPress={handleSubmitCustom} disabled={!customName.trim()} style={{ flex: 1 }} />
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </SafeAreaView>
@@ -224,6 +156,19 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 16 },
   scroll: { flex: 1, paddingHorizontal: 14 },
 
+  // Sections
+  sectionLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginTop: 16, marginBottom: 6 },
+  sectionDesc: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 12 },
+
+  // Empty state
+  emptyBox: {
+    borderWidth: 1, borderColor: colors.outlineVariant, borderStyle: 'dashed',
+    backgroundColor: colors.surface, padding: 24, alignItems: 'center', marginBottom: 12,
+  },
+  emptyText: { fontFamily: fonts.headline, fontSize: 12, color: colors.onSurface, letterSpacing: 1.5, marginBottom: 6 },
+  emptySubtext: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceVariant, textAlign: 'center' },
+
+  // Habit rows
   habitRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
     borderWidth: 1, borderColor: colors.outlineVariant, padding: 12, marginBottom: 8, gap: 12,
@@ -237,6 +182,10 @@ const s = StyleSheet.create({
   habitInfo: { flex: 1 },
   habitName: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 1.5 },
   habitXP: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 1, marginTop: 2 },
+  habitPendingMsg: { fontFamily: fonts.label, fontSize: 9, color: colors.tertiary, letterSpacing: 1, marginTop: 3 },
+  habitCompleteMsg: { fontFamily: fonts.label, fontSize: 9, color: colors.secondary, letterSpacing: 1, marginTop: 3 },
+
+  // Checkable circle for custom habits
   checkCircle: {
     width: 24, height: 24, borderWidth: 2, borderColor: colors.outline,
     borderRadius: 12, alignItems: 'center', justifyContent: 'center',
@@ -244,53 +193,13 @@ const s = StyleSheet.create({
   checkCircleDone: { borderColor: colors.secondary, backgroundColor: colors.secondaryContainer },
   checkMark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
 
-  // Sections
-  sectionLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginTop: 16, marginBottom: 6 },
-  sectionDesc: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 12 },
-
-  // Preset Grid
-  presetGrid: { gap: 10 },
-  presetCard: {
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant,
-    padding: 16, position: 'relative',
+  // Status indicator for integrated habits
+  statusIndicator: {
+    width: 28, height: 28, borderWidth: 1, borderColor: colors.outline,
+    alignItems: 'center', justifyContent: 'center',
   },
-  presetCardActive: { borderColor: colors.primaryContainer, borderWidth: 2, ...glow.purple },
-  activeBadge: {
-    position: 'absolute', top: 0, right: 0, backgroundColor: colors.primaryContainer,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  activeBadgeText: { fontFamily: fonts.label, fontSize: 8, color: '#fff', letterSpacing: 1.5 },
-  presetIcon: { fontSize: 28, marginBottom: 6 },
-  presetName: { fontFamily: fonts.headline, fontSize: 16, color: colors.onSurface, letterSpacing: 2, marginBottom: 4 },
-  presetDesc: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 8 },
-  diffBadge: {
-    borderWidth: 1, borderColor: colors.outline, paddingHorizontal: 8, paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-  diffText: { fontFamily: fonts.label, fontSize: 9, color: colors.tertiary, letterSpacing: 1.5 },
-
-  // Custom Quest
-  addCustomBtn: {
-    borderWidth: 1, borderColor: colors.outlineVariant, borderStyle: 'dashed',
-    padding: 16, alignItems: 'center', marginBottom: 4,
-  },
-  addCustomText: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2 },
-
-  // Consensus
-  consensusRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant,
-    padding: 12, marginBottom: 6,
-  },
-  consensusInfo: { flex: 1 },
-  consensusName: { fontFamily: fonts.headline, fontSize: 12, color: colors.onSurface, letterSpacing: 1.5 },
-  consensusDiff: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 1, marginTop: 2 },
-  statusBadge: {
-    borderWidth: 1, borderColor: colors.tertiary, paddingHorizontal: 8, paddingVertical: 4,
-  },
-  statusAccepted: { borderColor: colors.secondary, backgroundColor: 'rgba(76,227,70,0.1)' },
-  statusText: { fontFamily: fonts.label, fontSize: 9, color: colors.tertiary, letterSpacing: 1 },
-  statusTextAccepted: { color: colors.secondary },
+  statusVerified: { borderColor: colors.secondary, backgroundColor: 'rgba(76,227,70,0.1)' },
+  statusIndicatorText: { fontFamily: fonts.label, fontSize: 14, color: colors.onSurfaceVariant },
 
   // Contribution
   contribBox: {
@@ -316,21 +225,4 @@ const s = StyleSheet.create({
   },
   warningTitle: { fontFamily: fonts.headline, fontSize: 12, color: colors.error, letterSpacing: 1, marginBottom: 4 },
   warningText: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurface, lineHeight: 16 },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', paddingHorizontal: 16 },
-  modalCard: {
-    backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.primaryContainer,
-    padding: 18, borderRadius: shape.radius,
-  },
-  modalTitle: { fontFamily: fonts.headline, fontSize: 16, color: colors.secondary, letterSpacing: 2, marginBottom: 16 },
-  fieldLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondary, letterSpacing: 2, marginBottom: 8 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  chip: {
-    borderWidth: 1, borderColor: colors.outline, paddingHorizontal: 12, paddingVertical: 6,
-  },
-  chipActive: { borderColor: colors.secondary, backgroundColor: 'rgba(76,227,70,0.1)' },
-  chipText: { fontFamily: fonts.label, fontSize: 10, color: colors.onSurfaceVariant, letterSpacing: 1 },
-  chipTextActive: { color: colors.secondary },
-  modalActions: { flexDirection: 'row', gap: 8 },
 });

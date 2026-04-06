@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { colors, fonts } from '../theme/theme';
+import { colors, fonts } from '../theme';
 import RPGInput from '../components/RPGInput';
 import RPGButton from '../components/RPGButton';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
 import { collection, addDoc, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import fetchWithAuth from '../apiClient';
 
 export default function CreateRealmScreen({ navigation }) {
   const [realmName, setRealmName] = useState('');
@@ -33,6 +34,28 @@ export default function CreateRealmScreen({ navigation }) {
     setIsCreating(true);
     try {
       const uid = user.uid || user.id;
+
+      // 0. Validate external usernames
+      for (const type of ['LEETCODE', 'GITHUB']) {
+        if (selectedHabits.includes(type)) {
+          const username = usernames[type.toLowerCase()].trim();
+          if (!username) {
+            Alert.alert("Missing Username", `Please provide a username for ${type}.`);
+            setIsCreating(false);
+            return;
+          }
+          try {
+            const res = await fetchWithAuth(`/pulse/validate-username?type=${type.toLowerCase()}&username=${username}`);
+            if (!res.valid) {
+              Alert.alert("Invalid Username", `The ${type} username '${username}' could not be verified.`);
+              setIsCreating(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Validation error", e);
+          }
+        }
+      }
 
       // 1. Create realm document
       const docRef = await addDoc(collection(db, 'realms'), {
@@ -65,6 +88,7 @@ export default function CreateRealmScreen({ navigation }) {
         if (selectedHabits.includes(type)) {
           const habitRef = await addDoc(collection(db, 'habits'), {
             user_id: uid,
+            realm_id: docRef.id,
             title: type.charAt(0) + type.slice(1).toLowerCase(),
             type: type.toLowerCase(),
             streak: 0,
@@ -81,6 +105,7 @@ export default function CreateRealmScreen({ navigation }) {
           if (habitName.trim()) {
             const habitRef = await addDoc(collection(db, 'habits'), {
               user_id: uid,
+              realm_id: docRef.id,
               title: habitName.trim(),
               type: 'custom',
               streak: 0,
@@ -119,21 +144,20 @@ export default function CreateRealmScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Text style={s.backText}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={s.topBarTitle}>CREATE_REALM</Text>
+        <Text style={s.topBarTitle}>CREATE REALM</Text>
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.sectionLabel}>{'> '}REALM_CONFIG:</Text>
 
         <RPGInput
-          label="REALM_NAME"
+          label="REALM NAME"
           value={realmName}
           onChangeText={setRealmName}
           placeholder="e.g. The Iron Village"
         />
 
         {/* Member Count Selector */}
-        <Text style={s.fieldLabel}>{'> '}MEMBER_COUNT</Text>
+        <Text style={s.fieldLabel}>{'> '}MEMBER COUNT</Text>
         <View style={s.chipRow}>
           {[3, 4, 5].map((num) => (
             <TouchableOpacity
@@ -147,7 +171,7 @@ export default function CreateRealmScreen({ navigation }) {
         </View>
 
         {/* Habit Selection */}
-        <Text style={s.fieldLabel}>{'> '}CHOOSE_HABITS</Text>
+        <Text style={s.fieldLabel}>{'> '}CHOOSE HABITS</Text>
         <View style={s.chipRow}>
           {['LEETCODE', 'STRAVA', 'GITHUB', 'CUSTOM'].map((habit) => (
             <TouchableOpacity
@@ -163,7 +187,7 @@ export default function CreateRealmScreen({ navigation }) {
         {/* Username Inputs for services */}
         {selectedHabits.includes('LEETCODE') && (
           <RPGInput
-            label="LEETCODE_USERNAME"
+            label="LEETCODE USERNAME"
             value={usernames.leetcode}
             onChangeText={(val) => setUsernames({ ...usernames, leetcode: val })}
             placeholder="Your LeetCode username"
@@ -171,7 +195,7 @@ export default function CreateRealmScreen({ navigation }) {
         )}
         {selectedHabits.includes('STRAVA') && (
           <RPGInput
-            label="STRAVA_USERNAME"
+            label="STRAVA USERNAME"
             value={usernames.strava}
             onChangeText={(val) => setUsernames({ ...usernames, strava: val })}
             placeholder="Your Strava username"
@@ -179,7 +203,7 @@ export default function CreateRealmScreen({ navigation }) {
         )}
         {selectedHabits.includes('GITHUB') && (
           <RPGInput
-            label="GITHUB_USERNAME"
+            label="GITHUB USERNAME"
             value={usernames.github}
             onChangeText={(val) => setUsernames({ ...usernames, github: val })}
             placeholder="Your GitHub username"
@@ -189,12 +213,12 @@ export default function CreateRealmScreen({ navigation }) {
         {/* Custom Habits */}
         {selectedHabits.includes('CUSTOM') && (
           <View>
-            <Text style={s.fieldLabel}>{'> '}CUSTOM_HABITS</Text>
+            <Text style={s.fieldLabel}>{'> '}CUSTOM HABITS</Text>
             {customHabits.map((habit, index) => (
               <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <RPGInput
-                    label={`HABIT_${index + 1}`}
+                    label={`HABIT ${index + 1}`}
                     value={habit}
                     onChangeText={(val) => {
                       const newHabits = [...customHabits];
@@ -225,14 +249,14 @@ export default function CreateRealmScreen({ navigation }) {
 
         {/* Summary */}
         <View style={s.summaryBox}>
-          <Text style={s.summaryLabel}>{'> '}REALM_PREVIEW:</Text>
+          <Text style={s.summaryLabel}>{'> '}REALM PREVIEW:</Text>
           <Text style={s.summaryText}>NAME: {realmName || '---'}</Text>
           <Text style={s.summaryText}>MEMBERS: {memberCount}</Text>
           <Text style={s.summaryText}>HABITS: {selectedHabits.length > 0 ? selectedHabits.join(', ') : 'NONE'}</Text>
         </View>
 
         <RPGButton
-          title={isCreating ? 'CREATING...' : 'CREATE_REALM'}
+          title={isCreating ? 'CREATING...' : 'CREATE REALM'}
           variant="primary"
           onPress={handleCreate}
           disabled={!realmName.trim() || isCreating}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet } from 'react-native';
-import { colors, fonts, shape } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 
 export default function RPGInput({ label, value, onChangeText, placeholder, secureTextEntry = false, style }) {
   const [focused, setFocused] = useState(false);

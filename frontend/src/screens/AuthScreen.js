@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from 'react-native';
-import { colors, fonts, spacing, shape } from '../theme/theme';
+import { View, Text, TextInput, Image, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { colors, fonts, shape } from '../theme';
 import useAuthStore from '../store/authStore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -33,11 +33,11 @@ export default function AuthScreen({ navigation }) {
 
     // Basic validation
     if (!emailStr || !passStr) {
-      setErrorMessage("REQUIRED_FIELDS_MISSING: EMAIL_OR_PASS");
+      setErrorMessage("REQUIRED FIELDS MISSING: EMAIL OR PASS");
       return;
     }
     if (!isLogin && !displayName.trim()) {
-      setErrorMessage("REQUIRED_FIELDS_MISSING: DISPLAY_NAME");
+      setErrorMessage("REQUIRED FIELDS MISSING: DISPLAY NAME");
       return;
     }
 
@@ -92,7 +92,7 @@ export default function AuthScreen({ navigation }) {
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
           <Text style={s.topBarIcon}>⬡</Text>
-          <Text style={s.topBarTitle}>HABITOPIA_SYS</Text>
+          <Text style={s.topBarTitle}>HABITOPIA</Text>
         </View>
       </View>
 
@@ -102,7 +102,7 @@ export default function AuthScreen({ navigation }) {
           <View style={s.heroSection}>
             <Image source={require("../../assets/logo.png")} style={s.coinLogo} />
             <Text style={s.hero}>HABITOPIA</Text>
-            <Text style={s.heroSub}>SYSTEM_INIT // AUTHENTICATION</Text>
+            <Text style={s.heroSub}>AUTHENTICATION</Text>
           </View>
 
           {/* Auth Card */}
@@ -120,7 +120,7 @@ export default function AuthScreen({ navigation }) {
             {/* Only show Display Name field if Creating a new account */}
             {!isLogin && (
               <>
-                <Text style={s.inputLabel}>{'> '}DISPLAY_NAME</Text>
+                <Text style={s.inputLabel}>{'> '}DISPLAY NAME</Text>
                 <TextInput
                   style={[s.input, focusField === 'display' && s.inputFocus]}
                   value={displayName}
@@ -134,7 +134,7 @@ export default function AuthScreen({ navigation }) {
               </>
             )}
 
-            <Text style={s.inputLabel}>{'> '}USER_ID / EMAIL</Text>
+            <Text style={s.inputLabel}>{'> '}USER ID / EMAIL</Text>
             <TextInput
               style={[s.input, focusField === 'user' && s.inputFocus]}
               value={username}
@@ -148,7 +148,7 @@ export default function AuthScreen({ navigation }) {
               selectionColor={colors.secondary}
             />
 
-            <Text style={s.inputLabel}>{'> '}PASS_CODE</Text>
+            <Text style={s.inputLabel}>{'> '}PASSCODE</Text>
             <TextInput
               style={[s.input, focusField === 'pass' && s.inputFocus]}
               value={password}

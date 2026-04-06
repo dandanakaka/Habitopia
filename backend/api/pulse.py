@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.security import verify_firebase_token
 from core.firebase_setup import db
 from datetime import datetime, timezone
+import requests
+from pydantic import BaseModel
+from google.cloud.firestore_v1 import Increment, SERVER_TIMESTAMP
+from services.github_sync import get_daily_github_commits, get_daily_leetcode_solves
 
 router = APIRouter(prefix="/pulse", tags=["Pulse - Habits"])
 
@@ -122,3 +126,158 @@ async def log_habit_completion(habit_id: str, user: dict = Depends(verify_fireba
 
     log_ref.set(log_data)
     return {"message": "Habit logged", "log_id": log_id, "duplicate": False}
+
+
+class SyncRequest(BaseModel):
+    realm_id: str
+
+@router.post("/sync")
+async def sync_integrations(req: SyncRequest, user: dict = Depends(verify_firebase_token)):
+    """
+    Checks user's linked GitHub/Leetcode/Strava accounts for daily activity.
+    If activity exists, automatically completes their habit and awards Realm HP.
+    """
+    uid = user["uid"]
+    realm_id = req.realm_id
+    
+    # 1. Get user profile for usernames
+    user_ref = db.collection("users").document(uid)
+    user_doc = user_ref.get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user_data = user_doc.to_dict() or {}
+    github_username = user_data.get("githubName") or user_data.get("github_username") or user_data.get("github")
+    leetcode_username = user_data.get("leetcodeName") or user_data.get("leetcode_username") or user_data.get("leetcode")
+    
+    # 2. Get Realm details for HP computation and habit_ids
+    realm_ref = db.collection("realms").document(realm_id)
+    realm_doc = realm_ref.get()
+    if not realm_doc.exists:
+        raise HTTPException(status_code=404, detail="Realm not found")
+        
+    realm_data = realm_doc.to_dict() or {}
+    habit_ids = realm_data.get("habit_ids", [])
+    
+    # 3. Fetch all habits for this user from root collection
+    user_habits = []
+    for h_id in habit_ids:
+        h_ref = db.collection("habits").document(h_id)
+        h_doc = h_ref.get()
+        if h_doc.exists:
+            h_data = h_doc.to_dict()
+            if h_data.get("user_id") == uid:
+                user_habits.append((h_id, h_data, h_ref))
+        
+    if not user_habits:
+        return {"message": "No habits to sync", "updated": 0, "hp_awarded": 0}
+
+    members = realm_data.get("members", [])
+    members_count = len(members) if members else 1
+    total_habits = len(user_habits) if user_habits else 1
+    hp_gain = (100 / members_count) / total_habits
+    
+    updated_habits = 0
+    hp_awarded = 0
+    
+    # 4. Process Integrations
+    for h_id, h_data, h_ref in user_habits:
+        h_type = h_data.get("type", "manual")
+        h_status = h_data.get("status", 0)
+        
+        # Only care about pending integrated habits
+        if h_status == 1 or h_type == "manual":
+            continue
+            
+        completed_today = False
+            
+        if h_type == "github" and github_username:
+            res = get_daily_github_commits(github_username)
+            if res.get("commits_today", 0) > 0:
+                completed_today = True
+                
+        elif h_type == "leetcode" and leetcode_username:
+            res = get_daily_leetcode_solves(leetcode_username)
+            if res.get("solves_today", 0) > 0:
+                completed_today = True
+                
+        # (Strava placeholder: requires OAuth logic not yet built)
+        # elif h_type == "strava":
+        #    pass
+                
+        if completed_today:
+            # Mark habit as completed
+            h_ref.update({
+                "status": 1,
+                "lastUpdated": datetime.now(timezone.utc).isoformat()
+            })
+            
+            hp_awarded += hp_gain
+            updated_habits += 1
+            
+            # Award personal XP & completion logic
+            user_ref.update({
+                "xp": Increment(h_data.get("xp_value", 10)),
+                "habitsCompleted": Increment(1)
+            })
+
+            # Write to habit_logs
+            db.collection("habit_logs").add({
+                "user_id": uid,
+                "realm_id": realm_id,
+                "habit_type": h_type,
+                "timestamp": SERVER_TIMESTAMP,
+                "xp_reward": h_data.get("xp_value", 10)
+            })
+
+    # 5. Update Realm Health
+    if hp_awarded > 0:
+        realm_ref.update({
+            "health": Increment(hp_awarded)
+        })
+        
+    return {
+        "message": "Sync completed", 
+        "updated": updated_habits, 
+        "hp_awarded": hp_awarded
+    }
+
+
+@router.get("/validate-username")
+async def validate_username(type: str, username: str):
+    """
+    Validates if a given username exists on the target external platform.
+    """
+    if type == "github":
+        url = f"https://api.github.com/users/{username}"
+        try:
+            res = requests.get(url, timeout=10)
+            return {"valid": res.status_code == 200}
+        except requests.exceptions.RequestException:
+            return {"valid": False}
+            
+    elif type == "leetcode":
+        url = "https://leetcode.com/graphql"
+        query = """
+        query getUserProfile($username: String!) {
+            matchedUser(username: $username) {
+                username
+            }
+        }
+        """
+        try:
+            res = requests.post(url, json={'query': query, 'variables': {"username": username}}, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                valid = bool(data.get("data", {}).get("matchedUser"))
+                return {"valid": valid}
+            return {"valid": False}
+        except requests.exceptions.RequestException:
+            return {"valid": False}
+            
+    elif type == "strava":
+        # Strava requires OAuth, hard to validate publicly without token
+        return {"valid": True}
+        
+    else:
+        raise HTTPException(status_code=400, detail="Invalid integration type")

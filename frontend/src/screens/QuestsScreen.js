@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
-import { colors, fonts, shape, glow } from '../theme/theme';
+import { colors, fonts, shape, glow } from '../theme';
 import RPGButton from '../components/RPGButton';
 import ProfileModal from '../components/ProfileModal';
 import useQuestStore from '../store/questStore';
@@ -46,6 +46,14 @@ export default function QuestsScreen() {
       ]).then(([myHabits, theirHabits]) => {
         // filter myHabits to only show assignable ones
         const assignableHabits = myHabits.filter(myHabit => {
+          // Prevent assigning if there is already an active quest for it
+          const isAlreadyAssigned = quests.some(q =>
+            q.assigned_to === selectedMember &&
+            q.habit_title === myHabit.title &&
+            q.status !== 'declined'
+          );
+          if (isAlreadyAssigned) return false;
+
           if (['github', 'leetcode', 'strava'].includes(myHabit.type)) {
             return theirHabits.some(theirHabit => theirHabit.type === myHabit.type);
           }
@@ -104,7 +112,6 @@ export default function QuestsScreen() {
 
       {/* Banner */}
       <View style={s.banner}>
-        <Text style={s.bannerLabel}>SYSTEM_QUESTS // FRIEND_MISSIONS</Text>
         <Text style={s.bannerTitle}>FRIEND QUESTS</Text>
         <Text style={s.bannerSub}>ASSIGNED MISSIONS</Text>
         <View style={s.progressBox}>
@@ -314,12 +321,11 @@ const s = StyleSheet.create({
 
   // Banner
   banner: {
-    backgroundColor: colors.primaryContainer, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14,
+    backgroundColor: colors.secondaryContainer, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14,
     borderBottomWidth: 2, borderBottomColor: colors.primary,
   },
-  bannerLabel: { fontFamily: fonts.label, fontSize: 10, color: colors.secondary, letterSpacing: 2, marginBottom: 4 },
   bannerTitle: { fontFamily: fonts.headline, fontSize: 26, color: colors.onSurface, letterSpacing: 2 },
-  bannerSub: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, letterSpacing: 2, marginBottom: 10 },
+  bannerSub: { fontFamily: fonts.label, fontSize: 11, color: colors.surface, letterSpacing: 2, marginBottom: 10 },
   progressBox: {
     backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: colors.outline,
     padding: 10, borderRadius: shape.radius,

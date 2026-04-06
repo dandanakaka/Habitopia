@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, fonts, shape } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 
 export default function RPGButton({ title, onPress, variant = 'primary', style, disabled = false }) {
   const variants = {

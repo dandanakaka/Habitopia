@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { colors, fonts, spacing, shape, glow } from '../theme/theme';
-import ProgressBar from '../components/ProgressBar';
-import RPGButton from '../components/RPGButton';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal } from 'react-native';
+import { colors, fonts } from '../theme';
 import ProfileModal from '../components/ProfileModal';
 import useRealmStore from '../store/realmStore';
 import useHabitStore from '../store/habitStore';
 import useAuthStore from '../store/authStore';
+import useQuestStore from '../store/questStore';
+import * as Clipboard from 'expo-clipboard';
 
 // Castle Assets
 const CASTLE_1 = require('../../assets/castle-1.png');
@@ -28,17 +28,45 @@ export default function VillageScreen({ navigation }) {
   const { realm, memberProfiles, inviteCode, generateInviteCode, isLoading } = useRealmStore();
   const habits = useHabitStore((s) => s.habits);
   const user = useAuthStore((s) => s.user);
+  const quests = useQuestStore((s) => s.quests);
+
   const [showLink, setShowLink] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const completedCount = habits.filter((h) => h.completed).length;
-  const totalXP = habits.filter((h) => h.completed).reduce((s, h) => s + h.xp, 0);
+  // Combine habits and quests for Today's Contributions
+  const myHabitCompletedCount = habits.filter((h) => h.completed).length;
+  const myHabitXP = habits.filter((h) => h.completed).reduce((s, h) => s + h.xp, 0);
+
+  const myQuests = quests.filter((q) => q.assigned_to === user?.uid);
+  const myCompletedQuests = myQuests.filter((q) => q.status === 'completed');
+  const myQuestXP = myCompletedQuests.reduce((s, q) => s + (q.xp_reward || 0), 0);
+
+  const completedCount = myHabitCompletedCount + myCompletedQuests.length;
+  const totalXP = myHabitXP + myQuestXP;
+  const totalItems = habits.length + myQuests.length;
+
+  // Ensure fetchQuests is called if not already, to populate Village Screen data
+  useEffect(() => {
+    if (realm?.id && user?.uid) {
+      useHabitStore.getState().subscribeHabits(realm.id, user.uid);
+      useQuestStore.getState().fetchQuests(realm.id, user.uid);
+    }
+    return () => useHabitStore.getState().cleanup();
+  }, [realm?.id, user?.uid]);
 
   const handleInvite = () => {
-    const code = generateInviteCode();
+    generateInviteCode();
     setShowLink(true);
-    if (Platform.OS === 'web') alert(`Invite Code:\n${code}`);
-    else Alert.alert('Invite Code', code, [{ text: 'OK' }]);
+    setCopied(false);
+  };
+
+  const copyToClipboard = async () => {
+    if (inviteCode) {
+      await Clipboard.setStringAsync(inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   if (isLoading || !realm) {
@@ -72,9 +100,7 @@ export default function VillageScreen({ navigation }) {
         {/* Realm Header with Village State */}
         <View style={s.realmHeader}>
           <Image source={villageState.asset} style={s.villageIcon} resizeMode="cover" />
-
           <Text style={s.realmName}>{rName.toUpperCase()}</Text>
-          <Text style={s.realmId}>REALM_ID: {realm.id.toUpperCase()} // {membersCount} MEMBERS</Text>
         </View>
 
 
@@ -111,12 +137,12 @@ export default function VillageScreen({ navigation }) {
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
-              <Text style={[s.statValue, { color: colors.secondary }]}>{totalXP}</Text>
-              <Text style={s.statLabel}>XP EARNED</Text>
+              <Text style={[s.statValue, { color: colors.secondary }]}>{Math.round(totalXP)}</Text>
+              <Text style={s.statLabel}>HP EARNED</Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
-              <Text style={s.statValue}>{habits.length}</Text>
+              <Text style={s.statValue}>{totalItems}</Text>
               <Text style={s.statLabel}>TOTAL</Text>
             </View>
           </View>
@@ -139,13 +165,25 @@ export default function VillageScreen({ navigation }) {
           </View>
         ))}
 
-        {/* Invite Link Box */}
-        {showLink && inviteCode && (
-          <View style={s.linkBox}>
-            <Text style={s.linkLabel}>{'> '}INVITE_CODE:</Text>
-            <Text style={s.linkText} selectable>{inviteCode}</Text>
-          </View>
-        )}
+        {/* Invite Link Modal */}
+        <Modal visible={showLink && !!inviteCode} transparent animationType="fade" onRequestClose={() => setShowLink(false)}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowLink(false)}>
+            <View style={s.linkBox}>
+              <Text style={s.linkLabel}>{'> '}INVITE_CODE_LINK:</Text>
+              <TouchableOpacity onPress={copyToClipboard} activeOpacity={0.7} style={s.codeLink}>
+                <Text style={s.linkText}>{inviteCode}</Text>
+                <Text style={s.copyHint}>{copied ? 'COPIED!' : 'TAP TO COPY'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.closeBtn}
+                onPress={() => setShowLink(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.closeBtnText}>CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {/* Habit Wrapped Button */}
         <TouchableOpacity
@@ -153,7 +191,7 @@ export default function VillageScreen({ navigation }) {
           onPress={() => navigation.navigate('HabitWrapped')}
           activeOpacity={0.7}
         >
-          <Text style={s.wrappedBtnText}>📊 REALM_REPORT // MONTHLY_SUMMARY</Text>
+          <Text style={s.wrappedBtnText}>REALM REPORT / WEEKLY SUMMARY</Text>
         </TouchableOpacity>
 
         <View style={{ height: 20 }} />
@@ -189,9 +227,9 @@ const s = StyleSheet.create({
 
 
 
-  realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3 },
+  realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3, marginBottom: 20},
 
-  realmId: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 2, marginTop: 2 },
+
 
   // Village State Indicator
   stateRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, paddingHorizontal: 4 },
@@ -242,17 +280,28 @@ const s = StyleSheet.create({
   memberXPText: { fontFamily: fonts.headline, fontSize: 12, color: colors.secondary },
 
   // Link Box
-  linkBox: {
-    marginTop: 8, borderWidth: 1, borderColor: colors.outlineVariant,
-    backgroundColor: colors.surface, padding: 10,
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'flex-start', alignItems: 'center',
+    paddingTop: 60,
   },
-  linkLabel: { fontFamily: fonts.label, fontSize: 9, color: colors.secondary, letterSpacing: 1.5, marginBottom: 4 },
-  linkText: { fontFamily: fonts.headline, fontSize: 18, color: colors.primaryDim, letterSpacing: 4 },
-
+  linkBox: {
+    width: 350, borderWidth: 1, borderColor: colors.primaryContainer,
+    backgroundColor: colors.surface, padding: 20,
+  },
+  linkLabel: { fontFamily: fonts.label, fontSize: 9, color: colors.primary, letterSpacing: 1.5, marginBottom: 4 },
+  linkText: { fontFamily: fonts.headline, fontSize: 18, color: colors.secondary, letterSpacing: 4, textDecorationLine: 'underline' },
+  codeLink: { alignItems: 'center', marginVertical: 10 },
+  copyHint: { fontFamily: fonts.label, fontSize: 8, color: colors.onSurfaceVariant, marginTop: 4, letterSpacing: 1 },
+  closeBtn: {
+    marginTop: 10, borderWidth: 1, borderColor: colors.error,
+    backgroundColor: colors.errorContainer, padding: 8, alignItems: 'center',
+  },
+  closeBtnText: { fontFamily: fonts.label, fontSize: 10, color: colors.error, letterSpacing: 2 },
   // Wrapped Button
   wrappedBtn: {
-    marginTop: 16, borderWidth: 1, borderColor: colors.primaryContainer,
+    marginTop: 16, borderWidth: 1, borderColor: colors.secondaryContainer,
     backgroundColor: colors.surface, padding: 14, alignItems: 'center',
   },
-  wrappedBtnText: { fontFamily: fonts.label, fontSize: 10, color: colors.primaryDim, letterSpacing: 2 },
+  wrappedBtnText: { fontFamily: fonts.label, fontSize: 10, color: colors.secondaryDim, letterSpacing: 2 },
 });

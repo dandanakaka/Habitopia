@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { colors, fonts, spacing, shape, glow } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 import ProfileModal from '../components/ProfileModal';
 import useHabitStore from '../store/habitStore';
 import useRealmStore from '../store/realmStore';
 import useAuthStore from '../store/authStore';
+import fetchWithAuth from '../apiClient';
 
 const HABIT_ICONS = {
   github: '💻',
@@ -14,7 +15,7 @@ const HABIT_ICONS = {
 };
 
 export default function PulseScreen() {
-  const { habits, fetchHabits, toggleHabit, isLoading } = useHabitStore();
+  const { habits, subscribeHabits, toggleHabit, isLoading, cleanup } = useHabitStore();
   const realm = useRealmStore((s) => s.realm);
   const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
@@ -22,8 +23,16 @@ export default function PulseScreen() {
   // Fetch habits from Firestore when realm/user are available
   useEffect(() => {
     if (realm?.id && user?.uid) {
-      fetchHabits(realm.id, user.uid);
+      // 1. Initial Sync for integrations
+      fetchWithAuth('/pulse/sync', {
+        method: 'POST',
+        body: JSON.stringify({ realm_id: realm.id })
+      }).catch(err => console.log('Silent sync error:', err));
+
+      // 2. Real-time Subscription
+      subscribeHabits(realm.id, user.uid);
     }
+    return () => cleanup();
   }, [realm?.id, user?.uid]);
 
   // Contribution calculation
@@ -98,8 +107,10 @@ export default function PulseScreen() {
                   <Text style={s.habitName}>{h.title.toUpperCase()}</Text>
                   <Text style={s.habitXP}>+{h.xp} XP</Text>
                 </View>
-                <View style={[s.checkCircle, h.completed && s.checkCircleDone]}>
-                  {h.completed && <Text style={s.checkMark}>✓</Text>}
+                <View style={[s.statusIndicator, h.completed && s.statusVerified]}>
+                  <Text style={[s.statusIndicatorText, h.completed && { color: colors.secondary }]}>
+                    {h.completed ? '✓' : '☐'}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -185,15 +196,7 @@ const s = StyleSheet.create({
   habitPendingMsg: { fontFamily: fonts.label, fontSize: 9, color: colors.tertiary, letterSpacing: 1, marginTop: 3 },
   habitCompleteMsg: { fontFamily: fonts.label, fontSize: 9, color: colors.secondary, letterSpacing: 1, marginTop: 3 },
 
-  // Checkable circle for custom habits
-  checkCircle: {
-    width: 24, height: 24, borderWidth: 2, borderColor: colors.outline,
-    borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-  },
-  checkCircleDone: { borderColor: colors.secondary, backgroundColor: colors.secondaryContainer },
-  checkMark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-
-  // Status indicator for integrated habits
+  // Status indicator for all habits
   statusIndicator: {
     width: 28, height: 28, borderWidth: 1, borderColor: colors.outline,
     alignItems: 'center', justifyContent: 'center',
@@ -206,7 +209,7 @@ const s = StyleSheet.create({
     marginTop: 16, borderWidth: 1, borderColor: colors.outlineVariant,
     backgroundColor: colors.surface, padding: 14,
   },
-  contribLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.primaryDim, letterSpacing: 2, marginBottom: 10 },
+  contribLabel: { fontFamily: fonts.label, fontSize: 11, color: colors.secondaryDim, letterSpacing: 2, marginBottom: 10 },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sliderEnd: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 1 },
   sliderTrack: {

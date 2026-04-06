@@ -16,7 +16,7 @@ import HabitWrappedScreen from './src/screens/HabitWrappedScreen';
 import PulseScreen from './src/screens/PulseScreen';
 import QuestsScreen from './src/screens/QuestsScreen';
 import VillageScreen from './src/screens/VillageScreen';
-import { colors, fonts } from './src/theme/theme';
+import { colors, fonts } from './src/theme';
 
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './src/firebase';
@@ -52,7 +52,7 @@ function MainTabs() {
         component={VillageScreen}
         options={{
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>🏰</Text>,
-          tabBarLabel: 'VILLAGE',
+          tabBarLabel: 'REALM',
         }}
       />
       <Tab.Screen
@@ -67,7 +67,7 @@ function MainTabs() {
         name="MainQuests"
         component={PulseScreen}
         options={{
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>◎</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>📜</Text>,
           tabBarLabel: 'MAIN QUESTS',
         }}
       />
@@ -97,7 +97,7 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.secondary} size="large" />
-        <Text style={styles.loadingText}>INITIALIZING_SYSTEM...</Text>
+        <Text style={styles.loadingText}>INITIALIZING SYSTEM...</Text>
         <StatusBar style="light" />
       </View>
     );

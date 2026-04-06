@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, fonts, shape } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 
 export default function ProgressBar({ value = 0, max = 100, label, color, height = 6 }) {
   const pct = Math.min(Math.max((value / max) * 100, 0), 100);

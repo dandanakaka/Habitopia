@@ -99,6 +99,41 @@ const useRealmStore = create((set, get) => ({
     if (s.unsubscribeRealm) s.unsubscribeRealm();
     s.unsubscribeMembers.forEach(u => u());
     set({ realm: null, memberProfiles: [], unsubscribeRealm: null, unsubscribeMembers: [] });
+  },
+
+  leaveRealm: async (uid, realmId) => {
+    if (!uid || !realmId) return;
+    
+    try {
+      const { arrayRemove, updateDoc, doc, getDoc, deleteDoc } = await import('firebase/firestore');
+      
+      // 1. Manage Realm (delete if last member, else leave)
+      const realmRef = doc(db, 'realms', realmId);
+      const realmSnap = await getDoc(realmRef);
+      if (realmSnap.exists()) {
+        const data = realmSnap.data();
+        if (data.members?.length === 1 && data.members[0] === uid) {
+          await deleteDoc(realmRef);
+        } else {
+          await updateDoc(realmRef, {
+            members: arrayRemove(uid)
+          });
+        }
+      }
+      
+      // 2. Remove from User
+      await updateDoc(doc(db, 'users', uid), {
+        realm_ids: arrayRemove(realmId)
+      });
+
+      // 3. Cleanup local store
+      get().cleanup();
+      
+      return true;
+    } catch (error) {
+      console.error('Error leaving realm:', error);
+      throw error;
+    }
   }
 }));
 

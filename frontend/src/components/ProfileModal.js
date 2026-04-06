@@ -1,19 +1,79 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import { colors, fonts, shape } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
+import useHabitStore from '../store/habitStore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import fetchWithAuth from '../apiClient';
+import RPGInput from './RPGInput';
+import RPGButton from './RPGButton';
 
 export default function ProfileModal({ visible, onClose }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const memberProfiles = useRealmStore((s) => s.memberProfiles);
+  const { realm, memberProfiles, leaveRealm } = useRealmStore();
+  const habits = useHabitStore((s) => s.habits) || [];
   const navigation = useNavigation();
 
-  const currentMember = memberProfiles.find((m) => m.id === user?.uid) || { xp: 0, streak: 0 };
-  const totalGroupXP = memberProfiles.reduce((sum, m) => sum + (m.xp || 0), 0);
-  const contributionPct = totalGroupXP > 0 ? Math.round(((currentMember.xp || 0) / totalGroupXP) * 100) : 0;
+  const [isEditingNames, setIsEditingNames] = React.useState(false);
+  const [usernames, setUsernames] = React.useState({ github: '', leetcode: '', strava: '' });
+  const [isValidating, setIsValidating] = React.useState(false);
+
+  React.useEffect(() => {
+    if (visible && user?.uid) {
+      const fetchNames = async () => {
+        try {
+          const snap = await getDoc(doc(db, 'users', user.uid));
+          if (snap.exists()) {
+            const d = snap.data();
+            setUsernames({
+              github: d.githubName || d.github_username || '',
+              leetcode: d.leetcodeName || d.leetcode_username || '',
+              strava: d.stravaName || d.strava_username || '',
+            });
+          }
+        } catch (e) { console.warn(e); }
+      };
+      fetchNames();
+      setIsEditingNames(false);
+    }
+  }, [visible, user?.uid]);
+
+  const handleSaveNames = async () => {
+    setIsValidating(true);
+    // Validate
+    for (const type of ['leetcode', 'github']) {
+      const uname = usernames[type].trim();
+      if (uname) {
+        try {
+          const res = await fetchWithAuth(`/pulse/validate-username?type=${type}&username=${uname}`);
+          if (!res.valid) {
+            alert(`The ${type} username '${uname}' could not be verified.`);
+            setIsValidating(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Validation error', e);
+        }
+      }
+    }
+    
+    // Save
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        githubName: usernames.github.trim(),
+        leetcodeName: usernames.leetcode.trim(),
+        stravaName: usernames.strava.trim()
+      });
+      setIsEditingNames(false);
+    } catch (e) {
+      alert('Could not save usernames.');
+    }
+    setIsValidating(false);
+  };
 
   const handleLogout = () => {
     onClose();
@@ -22,6 +82,42 @@ export default function ProfileModal({ visible, onClose }) {
       CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] })
     );
   };
+
+  const handleLeaveRealm = () => {
+    if (!user?.uid || !realm?.id) return;
+
+    const isOnlyMember = memberProfiles.length === 1 && memberProfiles[0]?.id === user.uid;
+    let message = "Are you sure you want to leave this realm? This action cannot be reversed.";
+    if (isOnlyMember) {
+      message = "You are the last member of this realm. If you leave, the realm will be permanently deleted and this cannot be reversed.";
+    }
+
+    Alert.alert(
+      "Warning",
+      message,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Leave Realm", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveRealm(user.uid, realm.id);
+              onClose();
+              navigation.dispatch(
+                CommonActions.reset({ index: 0, routes: [{ name: 'RealmHub' }] })
+              );
+            } catch (e) {
+              Alert.alert('Error', 'Failed to leave realm.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const totalGroupXP = memberProfiles.reduce((sum, m) => sum + (m.xp || 0), 0);
+  const contributionPct = totalGroupXP > 0 ? Math.round(((user?.xp || 0) / totalGroupXP) * 100) : 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -32,30 +128,73 @@ export default function ProfileModal({ visible, onClose }) {
             <View style={s.avatarBox}><Text style={s.avatar}>🧙</Text></View>
             <View style={s.info}>
               <Text style={s.name}>{(user?.displayName || user?.username || 'COMMANDER').toUpperCase()}</Text>
-              <Text style={s.id}>ID: {user?.id?.toUpperCase() || 'U1'}</Text>
             </View>
           </View>
           <View style={s.stats}>
             <View style={s.statBox}>
-              <Text style={s.statValue}>{currentMember.xp}</Text>
+              <Text style={s.statValue}>{(!user?.displayName && !user?.username) ? '?' : (user?.xp || 0)}</Text>
               <Text style={s.statLabel}>TOTAL XP</Text>
             </View>
             <View style={s.divider} />
             <View style={s.statBox}>
-              <Text style={s.statValue}>{currentMember.streak}d</Text>
+              <Text style={s.statValue}>{user?.streak || 0}d</Text>
               <Text style={s.statLabel}>STREAK</Text>
             </View>
             <View style={s.divider} />
             <View style={s.statBox}>
               <Text style={[s.statValue, { color: colors.secondary }]}>{contributionPct}%</Text>
-              <Text style={s.statLabel}>CONTRIB</Text>
+              <Text style={s.statLabel}>CONTRIBUTION</Text>
             </View>
           </View>
+
+          {/* Compute Integration Visibility */}
+          {(() => {
+            const showGithub = habits.some(h => h.type === 'github') || !!usernames.github;
+            const showLeetcode = habits.some(h => h.type === 'leetcode') || !!usernames.leetcode;
+            const showStrava = habits.some(h => h.type === 'strava') || !!usernames.strava;
+
+            return (
+              <>
+
+          {/* Integrations Section */}
+          {(showGithub || showLeetcode || showStrava) && (
+            <View style={{ marginTop: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={s.title}>{'> '}INTEGRATIONS:</Text>
+                {!isEditingNames && (
+                  <TouchableOpacity onPress={() => setIsEditingNames(true)}>
+                    <Text style={{ fontFamily: fonts.label, fontSize: 10, color: colors.secondary }}>EDIT</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {isEditingNames ? (
+                <View>
+                  {showGithub && <RPGInput label="GITHUB_USERNAME" value={usernames.github} onChangeText={t => setUsernames({...usernames, github: t})} placeholder="GitHub" />}
+                  {showLeetcode && <RPGInput label="LEETCODE_USERNAME" value={usernames.leetcode} onChangeText={t => setUsernames({...usernames, leetcode: t})} placeholder="LeetCode" />}
+                  {showStrava && <RPGInput label="STRAVA_USERNAME" value={usernames.strava} onChangeText={t => setUsernames({...usernames, strava: t})} placeholder="Strava" />}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                    <RPGButton style={{ flex: 1 }} variant="ghost" title="CANCEL" onPress={() => setIsEditingNames(false)} />
+                    <RPGButton style={{ flex: 1 }} variant="primary" title={isValidating ? "VERIFYING..." : "SAVE"} onPress={handleSaveNames} disabled={isValidating} />
+                  </View>
+                </View>
+              ) : (
+                <View style={{ display: 'flex', gap: 6 }}>
+                  {showGithub && <Text style={s.statLabel}>GITHUB: <Text style={{ color: colors.onSurface }}>{usernames.github || 'NOT LINKED'}</Text></Text>}
+                  {showLeetcode && <Text style={s.statLabel}>LEETCODE: <Text style={{ color: colors.onSurface }}>{usernames.leetcode || 'NOT LINKED'}</Text></Text>}
+                  {showStrava && <Text style={s.statLabel}>STRAVA: <Text style={{ color: colors.onSurface }}>{usernames.strava || 'NOT LINKED'}</Text></Text>}
+                </View>
+              )}
+            </View>
+          )}
+              </>
+            );
+          })()}
           <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
             <Text style={s.logoutText}>⏻ LOGOUT_SESSION</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.closeBtn} onPress={onClose}>
-            <Text style={s.closeText}>[ CLOSE ]</Text>
+          <TouchableOpacity style={s.leaveBtn} onPress={handleLeaveRealm} activeOpacity={0.7}>
+            <Text style={s.leaveText}>🚪 LEAVE_REALM</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -92,6 +231,11 @@ const s = StyleSheet.create({
     backgroundColor: colors.errorContainer, padding: 12, alignItems: 'center',
   },
   logoutText: { fontFamily: fonts.label, fontSize: 11, color: colors.error, letterSpacing: 2 },
+  leaveBtn: {
+    marginTop: 10, borderWidth: 1, borderColor: colors.outline,
+    padding: 12, alignItems: 'center',
+  },
+  leaveText: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, letterSpacing: 2 },
   closeBtn: { alignItems: 'center', marginTop: 10 },
   closeText: { fontFamily: fonts.label, fontSize: 11, color: colors.onSurfaceVariant, letterSpacing: 2 },
 });

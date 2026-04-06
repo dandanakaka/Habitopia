@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
-import { colors, fonts, spacing, shape, glow } from '../theme/theme';
+import { colors, fonts, shape } from '../theme';
 import useAuthStore from '../store/authStore';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 
 export default function RealmHubScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
@@ -21,14 +19,14 @@ export default function RealmHubScreen({ navigation }) {
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
           <Text style={s.topBarIcon}>⬡</Text>
-          <Text style={s.topBarTitle}>HABITOPIA_SYS</Text>
+          <Text style={s.topBarTitle}>HABITOPIA</Text>
         </View>
       </View>
 
       <View style={s.container}>
         <Text style={s.greeting}>WELCOME BACK,</Text>
         <Text style={s.username}>{displayName.toUpperCase()}</Text>
-        <Text style={s.sectionLabel}>{'> '}SELECT_ACTION:</Text>
+        <Text style={s.sectionLabel}>{'> '}SELECT ACTION:</Text>
 
         <View style={s.cardStack}>
           {options.map((opt, i) => (

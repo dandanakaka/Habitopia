@@ -1,33 +1,48 @@
 import { create } from 'zustand';
 import { db } from '../firebase';
 import {
-  collection, addDoc, doc, getDoc, getDocs,
+  collection, addDoc, doc, getDoc,
   updateDoc, query, where, serverTimestamp,
+  onSnapshot, increment
 } from 'firebase/firestore';
+import useRealmStore from './realmStore';
 
 const useQuestStore = create((set, get) => ({
   quests: [],
   isLoading: false,
+  unsubscribeQuests: null,
 
   // Fetch quests for this realm that involve the current user
   fetchQuests: async (realmId, userId) => {
     if (!realmId || !userId) return;
+
+    // Cleanup previous listener if one exists
+    const currentUnsubscribe = get().unsubscribeQuests;
+    if (currentUnsubscribe) currentUnsubscribe();
+
     set({ isLoading: true });
 
     try {
-      // Get all quests for this realm
       const q = query(
         collection(db, 'quests'),
         where('realm_id', '==', realmId)
       );
-      const snapshot = await getDocs(q);
-      const allQuests = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(quest => quest.assigned_to === userId || quest.assigned_by === userId);
 
-      set({ quests: allQuests, isLoading: false });
+      // Listen to real-time changes
+      const unsub = onSnapshot(q, (snapshot) => {
+        const allQuests = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(quest => quest.assigned_to === userId || quest.assigned_by === userId);
+
+        set({ quests: allQuests, isLoading: false });
+      }, (err) => {
+        console.error('Failed to listen to quests:', err);
+        set({ isLoading: false });
+      });
+
+      set({ unsubscribeQuests: unsub });
     } catch (err) {
-      console.error('Failed to fetch quests', err);
+      console.error('Failed to setup quests listener', err);
       set({ isLoading: false });
     }
   },
@@ -35,6 +50,13 @@ const useQuestStore = create((set, get) => ({
   // Assign a habit to another user
   assignQuest: async (realmId, habitTitle, habitType, assignedTo, assignedBy) => {
     try {
+      // additional strict check to avoid double submission
+      const exists = get().quests.find(q => q.assigned_to === assignedTo && q.habit_title === habitTitle && q.status !== 'declined');
+      if (exists) {
+        console.warn('Quest already assigned');
+        return;
+      }
+
       const questData = {
         realm_id: realmId,
         habit_title: habitTitle,
@@ -47,36 +69,22 @@ const useQuestStore = create((set, get) => ({
         completed_at: null,
       };
 
-      const docRef = await addDoc(collection(db, 'quests'), questData);
-
-      // Optimistic add to local state
-      set((state) => ({
-        quests: [...state.quests, { id: docRef.id, ...questData, created_at: new Date() }],
-      }));
+      await addDoc(collection(db, 'quests'), questData);
+      // Removed optimistic UI update since onSnapshot instantly provides the new data locally
     } catch (err) {
       console.error('Failed to assign quest', err);
     }
   },
 
   acceptQuest: async (questId) => {
-    // Optimistic
-    set((state) => ({
-      quests: state.quests.map(q => q.id === questId ? { ...q, status: 'accepted' } : q),
-    }));
     try {
       await updateDoc(doc(db, 'quests', questId), { status: 'accepted' });
     } catch (err) {
       console.error('Failed to accept quest', err);
-      set((state) => ({
-        quests: state.quests.map(q => q.id === questId ? { ...q, status: 'pending' } : q),
-      }));
     }
   },
 
   declineQuest: async (questId) => {
-    set((state) => ({
-      quests: state.quests.map(q => q.id === questId ? { ...q, status: 'declined' } : q),
-    }));
     try {
       await updateDoc(doc(db, 'quests', questId), { status: 'declined' });
     } catch (err) {
@@ -88,23 +96,54 @@ const useQuestStore = create((set, get) => ({
     const quest = get().quests.find(q => q.id === questId);
     if (!quest) return;
 
+    // Toggle between completed and accepted
     const newStatus = quest.status === 'completed' ? 'accepted' : 'completed';
 
-    set((state) => ({
-      quests: state.quests.map(q =>
-        q.id === questId ? { ...q, status: newStatus, completed_at: newStatus === 'completed' ? new Date() : null } : q
-      ),
-    }));
     try {
+      // 1. Update the quest status
       await updateDoc(doc(db, 'quests', questId), {
         status: newStatus,
         completed_at: newStatus === 'completed' ? serverTimestamp() : null,
       });
+
+      // 2. Increment or decrement user XP depending on toggle
+      if (quest.assigned_to) {
+        const xpAmount = quest.xp_reward || 5;
+        const xpDelta = newStatus === 'completed' ? xpAmount : -xpAmount;
+        const completionsDelta = newStatus === 'completed' ? 1 : -1;
+
+        await updateDoc(doc(db, 'users', quest.assigned_to), {
+          xp: increment(xpDelta),
+          habitsCompleted: increment(completionsDelta),
+        });
+
+        // Compute and update Realm Health
+        const realmState = useRealmStore.getState().realm;
+        if (realmState?.id === quest.realm_id) {
+          const membersCount = realmState.members?.length || 1;
+          const userHabits = await get().fetchUserHabits(quest.realm_id, quest.assigned_to);
+          const totalUserHabits = userHabits.length || 1;
+          const personalHpGain = (100 / membersCount) / totalUserHabits;
+          const questHpGain = personalHpGain * 0.5; // 50% of regular personal habit
+          
+          await updateDoc(doc(db, 'realms', quest.realm_id), {
+            health: increment(newStatus === 'completed' ? questHpGain : -questHpGain)
+          });
+
+          // Write to habit_logs if completed
+          if (newStatus === 'completed') {
+            await addDoc(collection(db, 'habit_logs'), {
+              user_id: quest.assigned_to,
+              realm_id: quest.realm_id,
+              habit_type: 'quest_completion',
+              timestamp: serverTimestamp(),
+              xp_reward: xpAmount,
+            });
+          }
+        }
+      }
     } catch (err) {
-      console.error('Failed to complete quest', err);
-      set((state) => ({
-        quests: state.quests.map(q => q.id === questId ? { ...q, status: quest.status } : q),
-      }));
+      console.error('Failed to complete/uncomplete quest', err);
     }
   },
 
@@ -134,6 +173,13 @@ const useQuestStore = create((set, get) => ({
       return [];
     }
   },
+
+  // Added ability to opt-out and clean up listeners
+  cleanup: () => {
+    const s = get();
+    if (s.unsubscribeQuests) s.unsubscribeQuests();
+    set({ quests: [], unsubscribeQuests: null });
+  }
 }));
 
 export default useQuestStore;

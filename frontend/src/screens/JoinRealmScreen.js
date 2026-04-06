@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { colors, fonts } from '../theme/theme';
+import { colors, fonts } from '../theme';
 import RPGInput from '../components/RPGInput';
 import RPGButton from '../components/RPGButton';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
 import { collection, addDoc, doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import fetchWithAuth from '../apiClient';
 
 export default function JoinRealmScreen({ navigation }) {
   const [realmCode, setRealmCode] = useState('');
@@ -33,6 +34,28 @@ export default function JoinRealmScreen({ navigation }) {
     setIsJoining(true);
 
     try {
+      // 0. Validate external usernames
+      for (const type of ['LEETCODE', 'GITHUB']) {
+        if (selectedHabits.includes(type)) {
+          const username = usernames[type.toLowerCase()].trim();
+          if (!username) {
+            Alert.alert("Missing Username", `Please provide a username for ${type}.`);
+            setIsJoining(false);
+            return;
+          }
+          try {
+            const res = await fetchWithAuth(`/pulse/validate-username?type=${type.toLowerCase()}&username=${username}`);
+            if (!res.valid) {
+              Alert.alert("Invalid Username", `The ${type} username '${username}' could not be verified.`);
+              setIsJoining(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Validation error", e);
+          }
+        }
+      }
+
       // 1. Check if realm exists
       const realmRef = doc(db, 'realms', code);
       const realmSnap = await getDoc(realmRef);
@@ -81,6 +104,7 @@ export default function JoinRealmScreen({ navigation }) {
         if (selectedHabits.includes(type)) {
           const habitRef = await addDoc(collection(db, 'habits'), {
             user_id: user.uid,
+            realm_id: code,
             title: type.charAt(0) + type.slice(1).toLowerCase(),
             type: type.toLowerCase(),
             streak: 0,
@@ -97,6 +121,7 @@ export default function JoinRealmScreen({ navigation }) {
           if (habitName.trim()) {
             const habitRef = await addDoc(collection(db, 'habits'), {
               user_id: user.uid,
+              realm_id: code,
               title: habitName.trim(),
               type: 'custom',
               streak: 0,
@@ -135,17 +160,17 @@ export default function JoinRealmScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} disabled={isJoining}>
           <Text style={s.backText}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={s.topBarTitle}>JOIN_REALM</Text>
+        <Text style={s.topBarTitle}>JOIN REALM</Text>
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.container}>
-          <Text style={s.sectionLabel}>{'> '}ENTER_REALM_CODE:</Text>
+          <Text style={s.sectionLabel}>{'> '}ENTER REALM CODE:</Text>
           <Text style={s.desc}>Input the invite code shared by your realm leader to join an existing village.</Text>
 
           <View style={s.codeBox}>
             <RPGInput
-              label="REALM_CODE"
+              label="REALM CODE"
               value={realmCode}
               onChangeText={setRealmCode}
               placeholder="e.g. xK7m2pQ9"
@@ -153,7 +178,7 @@ export default function JoinRealmScreen({ navigation }) {
           </View>
 
           {/* Habit Selection */}
-          <Text style={s.sectionLabel}>{'> '}CHOOSE_HABITS:</Text>
+          <Text style={s.sectionLabel}>{'> '}CHOOSE HABITS:</Text>
           <View style={s.chipRow}>
             {['LEETCODE', 'STRAVA', 'GITHUB', 'CUSTOM'].map((habit) => (
               <TouchableOpacity
@@ -169,7 +194,7 @@ export default function JoinRealmScreen({ navigation }) {
           {/* Username Inputs for services */}
           {selectedHabits.includes('LEETCODE') && (
             <RPGInput
-              label="LEETCODE_USERNAME"
+              label="LEETCODE USERNAME"
               value={usernames.leetcode}
               onChangeText={(val) => setUsernames({ ...usernames, leetcode: val })}
               placeholder="Your LeetCode username"
@@ -177,7 +202,7 @@ export default function JoinRealmScreen({ navigation }) {
           )}
           {selectedHabits.includes('STRAVA') && (
             <RPGInput
-              label="STRAVA_USERNAME"
+              label="STRAVA USERNAME"
               value={usernames.strava}
               onChangeText={(val) => setUsernames({ ...usernames, strava: val })}
               placeholder="Your Strava username"
@@ -185,7 +210,7 @@ export default function JoinRealmScreen({ navigation }) {
           )}
           {selectedHabits.includes('GITHUB') && (
             <RPGInput
-              label="GITHUB_USERNAME"
+              label="GITHUB USERNAME"
               value={usernames.github}
               onChangeText={(val) => setUsernames({ ...usernames, github: val })}
               placeholder="Your GitHub username"
@@ -195,12 +220,12 @@ export default function JoinRealmScreen({ navigation }) {
           {/* Custom Habits */}
           {selectedHabits.includes('CUSTOM') && (
             <View>
-              <Text style={s.fieldLabel}>{'> '}CUSTOM_HABITS</Text>
+              <Text style={s.fieldLabel}>{'> '}CUSTOM HABITS</Text>
               {customHabits.map((habit, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <RPGInput
-                      label={`HABIT_${index + 1}`}
+                      label={`HABIT ${index + 1}`}
                       value={habit}
                       onChangeText={(val) => {
                         const newHabits = [...customHabits];
@@ -230,14 +255,14 @@ export default function JoinRealmScreen({ navigation }) {
           )}
 
           <View style={s.infoBox}>
-            <Text style={s.infoLabel}>{'> '}PROTOCOL_INFO:</Text>
+            <Text style={s.infoLabel}>{'> '}PROTOCOL INFO:</Text>
             <Text style={s.infoText}>• Code is case-sensitive</Text>
             <Text style={s.infoText}>• Codes expire after 24h</Text>
             <Text style={s.infoText}>• Max 5 members per realm</Text>
           </View>
 
           <RPGButton
-            title={isJoining ? 'JOINING...' : 'JOIN_REALM'}
+            title={isJoining ? 'JOINING...' : 'JOIN REALM'}
             variant="primary"
             onPress={handleJoin}
             disabled={!realmCode.trim() || isJoining}

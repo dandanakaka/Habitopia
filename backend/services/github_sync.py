@@ -45,7 +45,7 @@ def get_daily_leetcode_solves(username):
     
     # Query for the last 20 submissions
     query = """
-    query userRecentSubmissions($username: String!, $limit: int) {
+    query userRecentSubmissions($username: String!, $limit: Int) {
         recentSubmissionList(username: $username, limit: $limit) {
             title
             statusDisplay

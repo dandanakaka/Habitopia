@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { colors, fonts, spacing, shape, glow } from '../theme/theme';
+import { colors, fonts } from '../theme';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
 import { doc, getDoc } from 'firebase/firestore';
@@ -70,17 +70,17 @@ export default function AccessRealmScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Text style={s.backText}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={s.topBarTitle}>ACCESS_REALM</Text>
+        <Text style={s.topBarTitle}>ACCESS REALM</Text>
       </View>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.sectionLabel}>{'> '}YOUR_REALMS:</Text>
+        <Text style={s.sectionLabel}>{'> '}YOUR REALMS:</Text>
         <Text style={s.desc}>Select a realm to enter. Active realms are listed below.</Text>
 
         {isLoading ? (
           <View style={s.loaderBox}>
             <ActivityIndicator color={colors.secondary} size="large" />
-            <Text style={s.loaderText}>SYNCING_DATABASE...</Text>
+            <Text style={s.loaderText}>SYNCING DATABASE...</Text>
           </View>
         ) : realms.length > 0 ? (
           realms.map((realm) => {

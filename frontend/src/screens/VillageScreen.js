@@ -49,10 +49,8 @@ export default function VillageScreen({ navigation }) {
   // Ensure fetchQuests is called if not already, to populate Village Screen data
   useEffect(() => {
     if (realm?.id && user?.uid) {
-      useHabitStore.getState().subscribeHabits(realm.id, user.uid);
       useQuestStore.getState().fetchQuests(realm.id, user.uid);
     }
-    return () => useHabitStore.getState().cleanup();
   }, [realm?.id, user?.uid]);
 
   const handleInvite = () => {
@@ -227,7 +225,7 @@ const s = StyleSheet.create({
 
 
 
-  realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3, marginBottom: 20},
+  realmName: { fontFamily: fonts.headline, fontSize: 22, color: colors.secondary, letterSpacing: 3 },
 
 
 

@@ -1,10 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors, fonts } from '../theme';
 import useAuthStore from '../store/authStore';
 import useRealmStore from '../store/realmStore';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+
+// Castle Assets
+const CASTLE_1 = require('../../assets/castle-1.png');
+const CASTLE_2 = require('../../assets/castle-2.png');
+const CASTLE_3 = require('../../assets/castle-3.png');
+const CASTLE_4 = require('../../assets/castle-4.png');
+const CASTLE_5 = require('../../assets/castle-5.png');
+
+function getVillageState(health) {
+  if (health >= 80) return { asset: CASTLE_1, label: 'THRIVING', tier: 5 };
+  if (health >= 60) return { asset: CASTLE_2, label: 'STRONG', tier: 4 };
+  if (health >= 40) return { asset: CASTLE_3, label: 'STABLE', tier: 3 };
+  if (health >= 20) return { asset: CASTLE_4, label: 'WEAK', tier: 2 };
+  return { asset: CASTLE_5, label: 'DECAYED', tier: 1 };
+}
 
 function getHealthColor(health) {
   if (health >= 70) return colors.secondary;
@@ -22,6 +37,7 @@ export default function AccessRealmScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const [realms, setRealms] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
 
   useEffect(() => {
     const fetchRealms = async () => {
@@ -85,6 +101,7 @@ export default function AccessRealmScreen({ navigation }) {
         ) : realms.length > 0 ? (
           realms.map((realm) => {
             const healthVal = typeof realm.health === 'number' ? realm.health : 0;
+            const villageState = getVillageState(healthVal);
             const healthColor = getHealthColor(healthVal);
             const status = getHealthStatus(healthVal);
             const memberCount = Array.isArray(realm.members) ? realm.members.length : 0;
@@ -99,7 +116,7 @@ export default function AccessRealmScreen({ navigation }) {
               >
                 <View style={s.realmRow}>
                   <View style={s.realmIconBox}>
-                    <Text style={s.realmIcon}>{healthVal >= 70 ? '🏰' : healthVal >= 40 ? '🏗️' : '🏚️'}</Text>
+                    <Image source={villageState.asset} style={s.imageIcon} resizeMode="cover" />
                   </View>
                   <View style={s.realmInfo}>
                     <Text style={s.realmName}>{rName.toUpperCase()}</Text>
@@ -152,7 +169,7 @@ const s = StyleSheet.create({
     width: 40, height: 40, backgroundColor: colors.surfaceContainer,
     borderWidth: 1, borderColor: colors.outline, alignItems: 'center', justifyContent: 'center',
   },
-  realmIcon: { fontSize: 20 },
+  imageIcon: { width: '100%', height: '100%' },
   realmInfo: { flex: 1 },
   realmName: { fontFamily: fonts.headline, fontSize: 13, color: colors.onSurface, letterSpacing: 2 },
   realmMeta: { fontFamily: fonts.label, fontSize: 9, color: colors.onSurfaceVariant, letterSpacing: 1.5, marginTop: 2 },

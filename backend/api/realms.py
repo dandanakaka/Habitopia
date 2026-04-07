@@ -120,107 +120,130 @@ async def nightly_health_reset():
     3. Resets all habit statuses to 0.
     4. Cleans up old habit_logs.
     """
-    # Use managed batches for resets (Firestore limit is 500 per batch)
-    batch = db.batch()
-    op_count = 0
+    try:
+        # Use managed batches for resets (Firestore limit is 500 per batch)
+        batch = db.batch()
+        op_count = 0
 
-    def commit_if_full():
-        nonlocal batch, op_count
-        if op_count >= 400:
-            batch.commit()
-            batch = db.batch()
-            op_count = 0
+        def commit_if_full():
+            nonlocal batch, op_count
+            if op_count >= 400:
+                batch.commit()
+                batch = db.batch()
+                op_count = 0
 
-    # 1. Update Realms Health
-    realms_ref = db.collection("realms").stream()
-    realm_updates = 0
-    for r in realms_ref:
-        data = r.to_dict()
-        curr_health = data.get("health", 100)
-        new_health = max(0, curr_health - 100)
-        batch.update(r.reference, {"health": new_health})
-        realm_updates += 1
-        op_count += 1
-        commit_if_full()
-
-    # 2. Evaluate User Streaks BEFORE resetting habits
-    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min).replace(tzinfo=timezone.utc)
-    
-    streak_updates = 0
-    # Process by Realm to know N (members count)
-    realms_ref = db.collection("realms").stream()
-    
-    # Track which users we've evaluated to avoid double-processing if in multiple realms
-    evaluated_users = set()
-
-    for r in realms_ref:
-        r_data = r.to_dict()
-        r_id = r.id
-        members = r_data.get("members", [])
-        n = len(members) if members else 1
-        target_share = 100 / n
-        
-        for uid in members:
-            if uid in evaluated_users:
-                continue
-            
-            # Fetch all habits for this user in this realm to get T (total user habits)
-            # Standard Habitopia behavior: habits are linked to realm and user
-            user_habits = db.collection("habits").where("user_id", "==", uid).where("realm_id", "==", r_id).stream()
-            habit_list = list(user_habits)
-            t = len(habit_list) if habit_list else 1
-            
-            hp_per_habit = target_share / t
-            
-            # Fetch logs for today
-            logs = db.collection("habit_logs").where("user_id", "==", uid).where("realm_id", "==", r_id).where("timestamp", ">=", today_start).stream()
-            
-            contribution = 0
-            for log in logs:
-                l_data = log.to_dict()
-                if l_data.get("habit_type") == "quest_completion":
-                    contribution += (hp_per_habit * 0.5)
-                else:
-                    contribution += hp_per_habit
-            
-            # buffer for precision
-            success = contribution >= (target_share - 0.01)
-            
-            user_ref = db.collection("users").document(uid)
-            if success:
-                batch.update(user_ref, {"streak": Increment(1)})
-            else:
-                batch.update(user_ref, {"streak": 0})
-            
-            evaluated_users.add(uid)
-            streak_updates += 1
+        # 1. Update Realms Health
+        realms_ref = db.collection("realms").stream()
+        realm_updates = 0
+        for r in realms_ref:
+            data = r.to_dict()
+            curr_health = data.get("health", 100)
+            new_health = max(0, curr_health - 100)
+            batch.update(r.reference, {"health": new_health})
+            realm_updates += 1
             op_count += 1
             commit_if_full()
 
-    # 3. Reset All Habits to 0
-    all_habits = db.collection("habits").stream()
-    habit_resets = 0
-    for h in all_habits:
-        batch.update(h.reference, {"status": 0})
-        habit_resets += 1
-        op_count += 1
-        commit_if_full()
-
-    if op_count > 0:
-        batch.commit()
-    
-    # 4. Cleanup old habit_logs (> 7 days)
-    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    old_logs = db.collection("habit_logs").where("timestamp", "<", seven_days_ago).stream()
-    logs_deleted = 0
-    for log in old_logs:
-        log.reference.delete()
-        logs_deleted += 1
+        # 2. Evaluate User Streaks BEFORE resetting habits
+        today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min).replace(tzinfo=timezone.utc)
         
-    return {
-        "message": "Nightly reset complete", 
-        "realms_updated": realm_updates,
-        "streaks_evaluated": streak_updates,
-        "habits_reset": habit_resets,
-        "logs_cleaned": logs_deleted
-    }
+        streak_updates = 0
+        # Process by Realm to know N (members count)
+        realms_ref = db.collection("realms").stream()
+        
+        # Track which users we've evaluated to avoid double-processing if in multiple realms
+        evaluated_users = set()
+
+        for r in realms_ref:
+            r_data = r.to_dict()
+            r_id = r.id
+            members = r_data.get("members", [])
+            if not members:
+                continue
+                
+            n = len(members)
+            target_share = 100 / n
+            
+            # Optimized: Fetch ALL logs for this realm today in one query
+            realm_logs = db.collection("habit_logs").where("realm_id", "==", r_id).where("timestamp", ">=", today_start).stream()
+            
+            # Group logs by user_id for fast lookup
+            user_log_map = {}
+            for log in realm_logs:
+                l_data = log.to_dict()
+                uid = l_data.get("user_id")
+                if uid:
+                    if uid not in user_log_map:
+                        user_log_map[uid] = []
+                    user_log_map[uid].append(l_data)
+
+            # Defensive: Verify which users actually exist in the users collection to avoid 404s
+            user_refs = [db.collection("users").document(uid) for uid in members]
+            existing_user_docs = db.get_all(user_refs)
+            existing_uids = {doc.id for doc in existing_user_docs if doc.exists}
+
+            for uid in members:
+                if uid in evaluated_users or uid not in existing_uids:
+                    continue
+                
+                # Fetch all habits for this user in this realm to get T (total user habits)
+                user_habits = db.collection("habits").where("user_id", "==", uid).where("realm_id", "==", r_id).stream()
+                habit_list = list(user_habits)
+                t = len(habit_list) if habit_list else 1
+                
+                hp_per_habit = target_share / t
+                
+                # Use pre-fetched logs from our map
+                user_logs = user_log_map.get(uid, [])
+                
+                contribution = 0
+                for l_data in user_logs:
+                    if l_data.get("habit_type") == "quest_completion":
+                        contribution += (hp_per_habit * 0.5)
+                    else:
+                        contribution += hp_per_habit
+                
+                # buffer for precision
+                success = contribution >= (target_share - 0.01)
+                
+                user_ref = db.collection("users").document(uid)
+                if success:
+                    batch.update(user_ref, {"streak": Increment(1)})
+                else:
+                    batch.update(user_ref, {"streak": 0})
+                
+                evaluated_users.add(uid)
+                streak_updates += 1
+                op_count += 1
+                commit_if_full()
+
+        # 3. Reset All Habits to 0
+        all_habits = db.collection("habits").stream()
+        habit_resets = 0
+        for h in all_habits:
+            batch.update(h.reference, {"status": 0})
+            habit_resets += 1
+            op_count += 1
+            commit_if_full()
+
+        if op_count > 0:
+            batch.commit()
+        
+        # 4. Cleanup old habit_logs (> 7 days)
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        old_logs = db.collection("habit_logs").where("timestamp", "<", seven_days_ago).stream()
+        logs_deleted = 0
+        for log in old_logs:
+            log.reference.delete()
+            logs_deleted += 1
+            
+        return {
+            "message": "Nightly reset complete", 
+            "realms_updated": realm_updates,
+            "streaks_evaluated": streak_updates,
+            "habits_reset": habit_resets,
+            "logs_cleaned": logs_deleted
+        }
+    except Exception as e:
+        print(f"Reset Error: {e}")
+        return {"status": "error", "message": str(e), "type": type(e).__name__}

@@ -46,7 +46,7 @@ export default function PulseScreen() {
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
           <Text style={s.topBarGrid}>◎</Text>
-          <Text style={s.topBarTitle}>MAIN_QUESTS</Text>
+          <Text style={s.topBarTitle}>MAIN QUESTS</Text>
         </View>
         <TouchableOpacity onPress={() => setShowProfile(true)} style={s.avatar}>
           <Text style={s.avatarText}>🧙</Text>
@@ -138,7 +138,7 @@ export default function PulseScreen() {
           <View style={s.warningBox}>
             <Text style={s.warningTitle}>⚠ DECAY WARNING: VILLAGE AT RISK</Text>
             <Text style={s.warningText}>
-              Global activity is <Text style={{ fontWeight: 'bold' }}>LOW</Text>. Habit failure in 4 hours will result in <Text style={{ fontWeight: 'bold' }}>-200 Village HP</Text>.
+              Global activity is <Text style={{ fontWeight: 'bold' }}>LOW</Text>. Please complete your habits!
             </Text>
           </View>
         )}

@@ -7,6 +7,7 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+.expo-shared/
 
 # Metro
 .metro-health-check*
@@ -25,11 +26,6 @@ yarn-error.*
 *.key
 *.mobileprovision
 
-# generated native folders
-/ios
-/android
-
-
 # ===============================
 # Python (Backend)
 # ===============================
@@ -38,6 +34,7 @@ __pycache__/
 *$py.class
 *.pyo
 *.pyd
+.python-version
 
 
 # ===============================
@@ -88,7 +85,8 @@ db.sqlite3
 # ===============================
 .DS_Store
 *.pem
-
+*.xcworkspace
+DerivedData/
 
 # ===============================
 # VS Code

@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # Used by the services/integrations.py module
     GITHUB_TOKEN: str | None = None
     LEETCODE_SESSION_COOKIE: str | None = None
+    STRAVA_CLIENT_ID: str | None = None
+    STRAVA_CLIENT_SECRET: str | None = None
+
+    # Cron secret for protected scheduled endpoints (e.g. nightly-reset)
+    CRON_SECRET: str | None = None
 
     # Village Mechanics (Global Constants) [cite: 11]
     VILLAGE_MAX_MEMBERS: int = 5

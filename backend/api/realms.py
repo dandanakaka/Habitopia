@@ -101,7 +101,7 @@ async def get_realm_member_stats(realm_id: str, user: dict = Depends(verify_fire
     for member_uid in data["members"]:
         logs = (
             db.collection("habit_logs")
-            .where("user_uid", "==", member_uid)
+            .where("user_id", "==", member_uid)
             .where("date", "==", today)
             .stream()
         )
@@ -112,7 +112,7 @@ async def get_realm_member_stats(realm_id: str, user: dict = Depends(verify_fire
 
 
 @router.post("/nightly-reset")
-async def nightly_health_reset():
+async def nightly_health_reset(secret: str | None = None):
     """
     Nightly Village Health Reset (Called via Cron).
     1. Subtracts 100 from every realm's health.
@@ -120,6 +120,10 @@ async def nightly_health_reset():
     3. Resets all habit statuses to 0.
     4. Cleans up old habit_logs.
     """
+    expected = settings.CRON_SECRET
+    if not expected or secret != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         # Use managed batches for resets (Firestore limit is 500 per batch)
         batch = db.batch()

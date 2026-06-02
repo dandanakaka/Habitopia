@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from core.security import verify_firebase_token
 from core.firebase_setup import db
+from core.config import settings
 from datetime import datetime, timezone
 import requests
 from pydantic import BaseModel
 from google.cloud.firestore_v1 import Increment, SERVER_TIMESTAMP
 from services.github_sync import get_daily_github_commits, get_daily_leetcode_solves
+from services.strava_sync import get_daily_strava_activity
 
 router = APIRouter(prefix="/pulse", tags=["Pulse - Habits"])
 
@@ -116,7 +118,7 @@ async def log_habit_completion(habit_id: str, user: dict = Depends(verify_fireba
 
     log_data = {
         "log_id": log_id,
-        "user_uid": user["uid"],
+        "user_id": user["uid"],
         "habit_id": habit_id,
         "date": today,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -192,18 +194,22 @@ async def sync_integrations(req: SyncRequest, user: dict = Depends(verify_fireba
         completed_today = False
             
         if h_type == "github" and github_username:
-            res = get_daily_github_commits(github_username)
+            res = get_daily_github_commits(github_username, token=settings.GITHUB_TOKEN)
             if res.get("commits_today", 0) > 0:
                 completed_today = True
-                
+
         elif h_type == "leetcode" and leetcode_username:
             res = get_daily_leetcode_solves(leetcode_username)
             if res.get("solves_today", 0) > 0:
                 completed_today = True
-                
-        # (Strava placeholder: requires OAuth logic not yet built)
-        # elif h_type == "strava":
-        #    pass
+
+        elif h_type == "strava":
+            res = get_daily_strava_activity(user_data)
+            if res.get("activities_today", 0) > 0:
+                completed_today = True
+            # If tokens were refreshed, persist them back to the user document
+            if res.get("refreshed_tokens"):
+                user_ref.update(res["refreshed_tokens"])
                 
         if completed_today:
             # Mark habit as completed
@@ -230,11 +236,16 @@ async def sync_integrations(req: SyncRequest, user: dict = Depends(verify_fireba
                 "xp_reward": h_data.get("xp_value", 10)
             })
 
-    # 5. Update Realm Health
+    # 5. Update Realm Health (clamped to 100)
     if hp_awarded > 0:
-        realm_ref.update({
-            "health": Increment(hp_awarded)
-        })
+        # Re-read current health so we can clamp the increment to a 100 ceiling.
+        current_health = (realm_ref.get().to_dict() or {}).get("health", 0)
+        capped_gain = max(0, min(hp_awarded, 100 - current_health))
+        if capped_gain > 0:
+            realm_ref.update({
+                "health": Increment(capped_gain)
+            })
+        hp_awarded = capped_gain
         
     return {
         "message": "Sync completed", 
@@ -276,8 +287,59 @@ async def validate_username(type: str, username: str):
             return {"valid": False}
             
     elif type == "strava":
-        # Strava requires OAuth, hard to validate publicly without token
-        return {"valid": True}
-        
+        # Strava requires OAuth — surface the right UX message instead of
+        # silently claiming validity for any string.
+        return {
+            "valid": False,
+            "message": "Strava requires account connection via OAuth. Use the Connect Strava button.",
+        }
+
     else:
         raise HTTPException(status_code=400, detail="Invalid integration type")
+
+
+class StravaConnectRequest(BaseModel):
+    code: str
+
+
+@router.post("/strava/connect")
+async def strava_connect(req: StravaConnectRequest, user: dict = Depends(verify_firebase_token)):
+    """
+    Exchange a Strava OAuth `code` for tokens and persist them on the user document.
+    """
+    if not settings.STRAVA_CLIENT_ID or not settings.STRAVA_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Strava client credentials not configured")
+
+    try:
+        res = requests.post(
+            "https://www.strava.com/oauth/token",
+            data={
+                "client_id": settings.STRAVA_CLIENT_ID,
+                "client_secret": settings.STRAVA_CLIENT_SECRET,
+                "code": req.code,
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=400, detail=f"Strava request failed: {str(e)}")
+
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("message", res.text)
+        except ValueError:
+            detail = res.text
+        raise HTTPException(status_code=400, detail=detail or "Strava token exchange failed")
+
+    payload = res.json()
+    athlete = payload.get("athlete") or {}
+    athlete_id = str(athlete.get("id")) if athlete.get("id") is not None else None
+
+    db.collection("users").document(user["uid"]).update({
+        "strava_access_token": payload.get("access_token"),
+        "strava_refresh_token": payload.get("refresh_token"),
+        "strava_token_expires_at": payload.get("expires_at"),
+        "strava_athlete_id": athlete_id,
+    })
+
+    return {"connected": True, "athlete_id": athlete_id}

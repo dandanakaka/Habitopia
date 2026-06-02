@@ -126,8 +126,13 @@ const useQuestStore = create((set, get) => ({
           const personalHpGain = (100 / membersCount) / totalUserHabits;
           const questHpGain = personalHpGain * 0.5; // 50% of regular personal habit
           
+          const delta = newStatus === 'completed' ? questHpGain : -questHpGain;
+          const currentHealth = realmState.health ?? 0;
+          const clampedNewHealth = Math.max(0, Math.min(100, currentHealth + delta));
+          const clampedDelta = clampedNewHealth - currentHealth;
+
           await updateDoc(doc(db, 'realms', quest.realm_id), {
-            health: increment(newStatus === 'completed' ? questHpGain : -questHpGain)
+            health: increment(clampedDelta)
           });
 
           // Write to habit_logs if completed

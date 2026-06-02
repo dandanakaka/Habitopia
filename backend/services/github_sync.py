@@ -4,37 +4,35 @@ from datetime import datetime, timezone
 
 def get_daily_github_commits(username, token=None):
     """
-    Fetches the number of commits made by a user today (UTC).
+    Fetches the number of commits authored by a user today (UTC) via the
+    GitHub Search Commits API. Authenticated requests get a higher rate limit.
     """
-    url = f"https://api.github.com/users/{username}/events/public"
-    headers = {"Accept": "application/vnd.github.v3+json"}
+    today = datetime.now(timezone.utc).date().isoformat()
+    url = "https://api.github.com/search/commits"
+    params = {"q": f"author:{username} committer-date:{today}"}
+    # cloak-preview is required for the commits search endpoint
+    headers = {"Accept": "application/vnd.github.cloak-preview"}
     if token:
         headers["Authorization"] = f"token {token}"
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+
         if response.status_code == 403:
-            return {"error": "Rate limit exceeded"}
-        
-        response.raise_for_status()
-        events = response.json()
+            return {"error": "rate_limit"}
 
-        today = datetime.now(timezone.utc).date()
-        commit_count = 0
+        if response.status_code != 200:
+            try:
+                message = response.json().get("message", response.text)
+            except ValueError:
+                message = response.text
+            return {"error": message or f"http_{response.status_code}"}
 
-        for event in events:
-            if event["type"] == "PushEvent":
-                event_date = datetime.strptime(event["created_at"], "%Y-%m-%dT%H:%M:%SZ").date()
-                if event_date == today:
-                    commit_count += event.get("payload", {}).get("size", 0)
-                elif event_date < today:
-                    break
-
-        return {"username": username, "commits_today": commit_count}
+        data = response.json()
+        return {"username": username, "commits_today": data.get("total_count", 0)}
 
     except requests.exceptions.RequestException as e:
-        return {"error": f"GitHub connection failed: {str(e)}"}
+        return {"error": str(e)}
 
 def get_daily_leetcode_solves(username):
     """

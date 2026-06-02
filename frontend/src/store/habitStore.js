@@ -92,9 +92,13 @@ const useHabitStore = create((set, get) => ({
         if (totalUserHabits === 0) return;
         
         const hpGain = (100 / membersCount) / totalUserHabits;
-        
+        const delta = newStatus === 1 ? hpGain : -hpGain;
+        const currentHealth = realmState.health ?? 0;
+        const clampedNewHealth = Math.max(0, Math.min(100, currentHealth + delta));
+        const clampedDelta = clampedNewHealth - currentHealth;
+
         await updateDoc(doc(db, 'realms', realmState.id), {
-          health: increment(newStatus === 1 ? hpGain : -hpGain)
+          health: increment(clampedDelta)
         });
 
         // Write to habit_logs if completed
